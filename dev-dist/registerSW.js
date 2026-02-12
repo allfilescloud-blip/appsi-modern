@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/appsi-modern/dev-sw.js?dev-sw', { scope: '/appsi-modern/', type: 'classic' })

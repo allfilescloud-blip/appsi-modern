@@ -270,7 +270,7 @@ export default function TicketDetails() {
     };
 
     return (
-        <div className="max-w-6xl mx-auto space-y-6 pb-10 h-[calc(100vh-100px)] flex flex-col relative">
+        <div className="max-w-6xl mx-auto space-y-6 pb-10 min-h-[calc(100dvh-100px)] lg:h-[calc(100dvh-100px)] flex flex-col relative">
             {/* Header */}
             <div className="flex items-center gap-4 mb-2">
                 <button onClick={() => navigate('/chamados')} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
@@ -289,7 +289,7 @@ export default function TicketDetails() {
 
             <div className="flex flex-col lg:flex-row gap-6 h-full overflow-hidden">
                 {/* Main Chat Area */}
-                <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+                <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col lg:overflow-hidden">
 
                     {/* Description Section */}
                     <div className="p-4 border-b border-gray-100 bg-gray-50/30">
@@ -307,7 +307,7 @@ export default function TicketDetails() {
 
 
 
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
+                    <div className="flex-1 lg:overflow-y-auto p-4 space-y-4 bg-gray-50/50">
                         {ticket.interacoes && ticket.interacoes.map((msg, idx) => {
                             const currentUserName = getCurrentUserName();
                             const isMe = msg.autor === currentUserName || msg.autor === auth.currentUser?.email;

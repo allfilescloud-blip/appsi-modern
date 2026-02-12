@@ -332,7 +332,7 @@ export default function KanbanBoard() {
     const getTasksByStatus = (status) => tasks.filter(t => t.status === status);
 
     return (
-        <div className="w-full max-w-full h-[calc(100vh-130px)] lg:h-[calc(100vh-50px)] flex flex-col p-1 lg:p-4 bg-slate-50 relative overflow-hidden">
+        <div className="w-full max-w-full h-[calc(100dvh-130px)] lg:h-[calc(100dvh-50px)] flex flex-col p-1 lg:p-4 bg-slate-50 relative overflow-hidden">
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 flex-shrink-0">
                 <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">

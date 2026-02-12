@@ -711,7 +711,7 @@ const Flex = () => {
                                     <List size={18} /> Itens do Relatório
                                     <span className="flex-report-items-count ml-2">{reportForm.items.length} itens</span>
                                 </h3>
-                                <div className="max-h-60 overflow-y-auto border rounded-lg">
+                                <div className="max-h-60 overflow-auto border rounded-lg">
                                     <table className="flex-items-table mb-0">
                                         <thead>
                                             <tr>

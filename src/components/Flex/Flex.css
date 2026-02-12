@@ -543,6 +543,10 @@
         text-align: center;
     }
 
+    .flex-container {
+        padding: 10px;
+    }
+
     .flex-reports-header {
         display: none;
         /* Hide header on mobile */
