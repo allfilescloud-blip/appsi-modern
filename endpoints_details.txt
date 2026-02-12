@@ -1,0 +1,53 @@
+
+--- Path: /order/{orderId} ---
+Method: GET
+Summary: Pesquisar pedido por id.
+Parameters:
+  - orderId (path): integer
+
+--- Path: /order/search ---
+Method: GET
+Summary: Pesquisa lista de pedido.
+Parameters:
+  - orderId (query): integer
+  - statusId (query): integer
+  - authenticationId (query): integer
+  - limit (query): integer
+  - offset (query): integer
+  - marketplace (query): string
+  - origin (query): string
+  - orderPackId (query): string
+  - orderCode (query): string
+  - startDate (query): string
+  - endDate (query): string
+
+--- Path: /sku/stock ---
+Method: PUT
+Summary: Altera a quantidade em estoque do SKU
+Request Body:
+{
+  "description": "Envie as informações abaixo para ter sucesso",
+  "content": {
+    "application/json": {
+      "schema": {
+        "$ref": "#/components/schemas/Ideris.Core.Lib.Model.RestModels.InternalApi.Sku.StockApi"
+      }
+    },
+    "text/json": {
+      "schema": {
+        "$ref": "#/components/schemas/Ideris.Core.Lib.Model.RestModels.InternalApi.Sku.StockApi"
+      }
+    },
+    "application/*+json": {
+      "schema": {
+        "$ref": "#/components/schemas/Ideris.Core.Lib.Model.RestModels.InternalApi.Sku.StockApi"
+      }
+    }
+  }
+}
+
+--- Path: /sku/code/{sku} ---
+Method: GET
+Summary: Pesquisar pelo código do SKU
+Parameters:
+  - sku (path): string

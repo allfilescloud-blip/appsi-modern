@@ -1,0 +1,27 @@
+{
+  "id": 1,
+  "sku": "36",
+  "title": "SSD KINGSTON 240GB SATA 2.5\"",
+  "thumbnail": "https://s3.amazonaws.com/iderislab/20042/2024/12/31/20042_609fea97-ec01-4d6b-8e57-c45cdb1450f4_75x100.jpg",
+  "authenticationId": null,
+  "parentSkuId": null,
+  "type": "SIMPLES",
+  "unitId": null,
+  "created": "2024-03-25T13:22:51",
+  "updated": "2024-12-31T11:20:45",
+  "updateStockListings": true,
+  "updateStockKit": true,
+  "ncmId": 18,
+  "originId": 1,
+  "ean": "740617261219",
+  "stocks": [
+    {
+      "id": 1,
+      "warehouseId": 1,
+      "currentStock": 0,
+      "updated": null,
+      "limits": null
+    }
+  ],
+  "child": null
+}

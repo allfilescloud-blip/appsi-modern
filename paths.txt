@@ -1,0 +1,25 @@
+Searching for order/product/stock/sku related paths:
+/listingModel/origin/{productOriginId}
+/product/origin/search
+/sku/code/{sku}
+/sku/{skuId}
+/sku
+/sku/{sku}
+/skuId/{skuId}
+/sku/search
+/sku/stock
+/sku/searchByChild
+/listing/sku/{sku}/authentication/{authenticationId}/ideris
+/listing/{idAnuncio}/stock
+/listing/{idAnuncio}/stock/{marketplace}
+/order/search
+/order/{orderId}
+/order
+/order/authentication/{authenticationId}
+/order/status/search
+/order/{orderId}/status
+/order/{orderId}/invoice
+/order/label
+/order/{orderId}/contract/{contractId}/service/{serviceId}/correios
+/order/{orderid}/correios
+/marketplace/order/{orderMarketplaceId}/authentication/{authenticationId}
