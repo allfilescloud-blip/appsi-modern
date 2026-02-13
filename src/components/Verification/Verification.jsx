@@ -17,8 +17,6 @@ export default function Verification() {
     // Scanner State
     const [isScannerActive, setIsScannerActive] = useState(false);
     const html5QrCodeRef = useRef(null);
-    const fileInputRef = useRef(null);
-
     const inputRef = useRef(null);
 
     useEffect(() => {
@@ -212,36 +210,35 @@ export default function Verification() {
             html5QrCodeRef.current = html5QrCode;
 
             const config = {
-                fps: 15,
-                qrbox: (viewfinderWidth, viewfinderHeight) => {
-                    const minSize = 150;
-                    const width = Math.floor(Math.min(viewfinderWidth * 0.8, Math.max(minSize, viewfinderWidth)));
-                    const height = Math.floor(Math.min(width * 0.5, Math.max(minSize, viewfinderHeight)));
-                    return { width, height };
-                },
+                fps: 20,
+                qrbox: null, // Câmera total
                 aspectRatio: 1.0,
             };
 
-            const successCallback = (decodedText) => {
+            const successCallback = async (decodedText) => {
                 if (isProcessingRef.current) return;
                 isProcessingRef.current = true;
-                setTimeout(() => { isProcessingRef.current = false; }, 2000);
 
-                handleSearch(null, decodedText).then((status) => {
-                    if (status === 'error' || status === 'duplicate') {
-                        stopScanner();
-                    }
-                });
+                // Beep imediato
+                playSound('success');
+
+                try {
+                    const result = await handleSearch(null, decodedText);
+                    // No Verification, se for cancelado ou erro, talvez queira mostrar vermelho, 
+                    // mas o handleSearch já cuida de tudo (toast, som de erro se necessário, lista).
+                } finally {
+                    // Debounce para permitir leitura contínua
+                    setTimeout(() => { isProcessingRef.current = false; }, 1000);
+                }
             };
 
             try {
-                // Tentativa 1: Câmera traseira nativa
+                // Tentativa 1: Traseira
                 await html5QrCode.start({ facingMode: "environment" }, config, successCallback);
                 setIsScannerActive(true);
             } catch (firstErr) {
                 console.warn("Falha ao iniciar com facingMode no Verification, tentando fallback...", firstErr);
                 try {
-                    // Tentativa 2: Listar câmeras e pegar a última
                     const devices = await Html5Qrcode.getCameras();
                     if (devices && devices.length > 0) {
                         const cameraId = devices[devices.length - 1].id;
@@ -252,41 +249,18 @@ export default function Verification() {
                     }
                 } catch (secondErr) {
                     console.error("Erro total no scanner do Verification:", secondErr);
-                    const errorStr = secondErr.toString();
-                    if (secondErr.name === 'NotAllowedError' || errorStr.includes('Permission denied')) {
-                        toast.error("Acesso à câmera negado. Use 'Upload de Foto' ou verifique as permissões.");
-                    } else {
-                        toast.error("Não foi possível acessar a câmera. Tente 'Upload'.");
-                    }
+                    toast.error("Não foi possível acessar a câmera.");
                     setIsScannerActive(false);
                 }
             }
         } catch (err) {
             console.error("Erro crítico no scanner do Verification:", err);
-            toast.error("Erro de configuração do scanner.");
+            toast.error("Erro ao configurar scanner.");
             setIsScannerActive(false);
         }
     };
 
-    const handleImageUpload = async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        if (!html5QrCodeRef.current) {
-            html5QrCodeRef.current = new Html5Qrcode("verification-reader");
-        }
-
-        try {
-            const decodedText = await html5QrCodeRef.current.scanFile(file, true);
-            handleSearch(null, decodedText);
-            toast.success("Código extraído!");
-        } catch (err) {
-            console.error("Erro ao ler imagem:", err);
-            toast.error("Nenhum código encontrado na imagem.");
-        } finally {
-            if (event.target) event.target.value = "";
-        }
-    };
+    // handleImageUpload removido (conforme solicitado)
 
     const stopScanner = async () => {
         if (html5QrCodeRef.current) {
@@ -408,22 +382,9 @@ export default function Verification() {
                                 className="w-full"
                                 style={{ width: '100%', minHeight: '300px' }}
                             ></div>
-                            <p className="text-center text-white py-2 text-sm">Aponte para o código de barras</p>
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="absolute top-2 right-2 bg-blue-600/80 hover:bg-blue-600 text-white p-2 rounded-lg backdrop-blur-sm transition-colors flex items-center gap-2 text-sm"
-                                title="Faz upload de uma imagem se a câmera falhar"
-                            >
-                                <Camera size={16} />
-                                <span>Upload</span>
-                            </button>
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                className="hidden"
-                                accept="image/*"
-                                onChange={handleImageUpload}
-                            />
+                            <p className="text-center text-white py-2 text-sm bg-black font-semibold">
+                                Câmera frontal/traseira (Total)
+                            </p>
                         </div>
                     )}
 
@@ -461,8 +422,10 @@ export default function Verification() {
                             </div>
 
                             <div className="flex items-center gap-4">
+                                {lastResult.type === 'success' ? (
+                                    <CheckCircle className="w-24 h-24 text-green-500 opacity-20" />
                                 ) : (
-                                <XCircle className="w-24 h-24 text-red-500 opacity-20" />
+                                    <XCircle className="w-24 h-24 text-red-500 opacity-20" />
                                 )}
                             </div>
                         </div>

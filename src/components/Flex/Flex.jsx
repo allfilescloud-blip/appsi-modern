@@ -68,7 +68,6 @@ const Flex = () => {
     const [isScannerActive, setIsScannerActive] = useState(false);
     const scannerRef = useRef(null);
     const html5QrCodeRef = useRef(null);
-    const fileInputRef = useRef(null);
 
     // Print State
     const [lastSavedReport, setLastSavedReport] = useState(null);
@@ -259,22 +258,23 @@ const Flex = () => {
             html5QrCodeRef.current = html5QrCode;
 
             const config = {
-                fps: 15,
-                qrbox: (viewfinderWidth, viewfinderHeight) => {
-                    const minSize = 150;
-                    const width = Math.floor(Math.min(viewfinderWidth * 0.8, Math.max(minSize, viewfinderWidth)));
-                    const height = Math.floor(Math.min(width * 0.6, Math.max(minSize, viewfinderHeight)));
-                    return { width, height };
-                },
+                fps: 20, // Aumentado para maior fluidez
+                qrbox: null, // Câmera total (ocupa todo o visor disponível)
                 aspectRatio: 1.0,
             };
 
             const successCallback = (decodedText) => {
                 if (isProcessingRef.current) return;
                 isProcessingRef.current = true;
-                setTimeout(() => { isProcessingRef.current = false; }, 1500);
+
+                // Feedback Sonoro (Bip)
+                playSound('success');
+
                 addItem(decodedText);
                 toast.success("Código lido!");
+
+                // Debounce de 1 segundo para permitir leitura contínua rápida
+                setTimeout(() => { isProcessingRef.current = false; }, 1000);
             };
 
             try {
@@ -282,9 +282,8 @@ const Flex = () => {
                 await html5QrCode.start({ facingMode: "environment" }, config, successCallback);
                 setIsScannerActive(true);
             } catch (firstErr) {
-                console.warn("Falha ao iniciar com facingMode, tentando fallback...", firstErr);
+                console.warn("Falha ao iniciar com facingMode no Flex, tentando fallback...", firstErr);
                 try {
-                    // Tentativa 2: Listar câmeras e pegar a última (geralmente a traseira)
                     const devices = await Html5Qrcode.getCameras();
                     if (devices && devices.length > 0) {
                         const cameraId = devices[devices.length - 1].id;
@@ -294,40 +293,40 @@ const Flex = () => {
                         throw new Error("Nenhuma câmera encontrada.");
                     }
                 } catch (secondErr) {
-                    console.error("Erro total no scanner:", secondErr);
-                    const errorStr = secondErr.toString();
-                    if (secondErr.name === 'NotAllowedError' || errorStr.includes('Permission denied')) {
-                        toast.error("Permissão de câmera negada. Habilite o acesso ou use a opção de 'Upload de Foto'.");
-                    } else {
-                        toast.error("Não foi possível acessar a câmera. Tente a opção de 'Upload'.");
-                    }
+                    console.error("Erro total no scanner do Flex:", secondErr);
+                    toast.error("Não foi possível acessar a câmera.");
                     setIsScannerActive(false);
                 }
             }
         } catch (err) {
-            console.error("Erro crítico no scanner:", err);
-            toast.error("Erro ao configurar scanner.");
+            console.error("Erro crítico no scanner do Flex:", err);
+            toast.error("Erro de configuração do scanner.");
             setIsScannerActive(false);
         }
     };
 
-    const handleImageUpload = async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        if (!html5QrCodeRef.current) {
-            html5QrCodeRef.current = new Html5Qrcode("flex-reader");
-        }
-
+    const playSound = (type = 'success') => {
         try {
-            const decodedText = await html5QrCodeRef.current.scanFile(file, true);
-            addItem(decodedText);
-            toast.success("Código extraído da imagem!");
-        } catch (err) {
-            console.error("Erro ao ler imagem:", err);
-            toast.error("Não foi possível ler um código nesta imagem.");
-        } finally {
-            if (event.target) event.target.value = ""; // Reset input
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const audioContext = new AudioContext();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            if (type === 'success') {
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(1200, audioContext.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.1);
+            }
+        } catch (e) {
+            console.warn("Audio Context Error:", e);
         }
     };
 
@@ -761,23 +760,9 @@ const Flex = () => {
                                 style={{ display: isScannerActive ? 'block' : 'none' }}
                             >
                                 <div id="flex-reader" className="w-full"></div>
-                                <p className="text-center text-white py-2 text-sm bg-black">Aponte para o código de barras</p>
-
-                                <button
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="absolute top-2 right-2 bg-blue-600/80 hover:bg-blue-600 text-white p-2 rounded-lg backdrop-blur-sm transition-colors flex items-center gap-2 text-xs"
-                                    title="Upload de imagem se a câmera falhar"
-                                >
-                                    <Camera size={14} />
-                                    <span>Upload</span>
-                                </button>
-                                <input
-                                    type="file"
-                                    ref={fileInputRef}
-                                    className="hidden"
-                                    accept="image/*"
-                                    onChange={handleImageUpload}
-                                />
+                                <p className="text-center text-white py-2 text-sm bg-black font-semibold">
+                                    Câmera frontal/traseira (Total)
+                                </p>
                             </div>
 
                             {/* Items List */}
