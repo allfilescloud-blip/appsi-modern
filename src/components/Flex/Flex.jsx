@@ -76,6 +76,8 @@ const Flex = () => {
     const { userData, currentUser: user } = useAuth(); // Maps currentUser from context to user locally
 
     // Load Reports
+    const isProcessingRef = useRef(false);
+
     useEffect(() => {
         if (!user) return;
 
@@ -255,42 +257,34 @@ const Flex = () => {
             const html5QrCode = new Html5Qrcode(elementId);
             html5QrCodeRef.current = html5QrCode;
 
-            const devices = await Html5Qrcode.getCameras();
-
-            if (devices && devices.length) {
-                let cameraId = devices[0].deviceId;
-                // Try to find back camera
-                const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('traseira'));
-                if (backCamera) cameraId = backCamera.deviceId;
-
-                await html5QrCode.start(
-                    cameraId,
-                    {
-                        fps: 10,
-                        qrbox: { width: 250, height: 150 },
-                        aspectRatio: 1.0,
-                        formatsToSupport: [
-                            Html5QrcodeSupportedFormats.CODE_128,
-                            Html5QrcodeSupportedFormats.EAN_13,
-                            Html5QrcodeSupportedFormats.UPC_A,
-                            Html5QrcodeSupportedFormats.QR_CODE
-                        ]
+            await html5QrCode.start(
+                { facingMode: "environment" },
+                {
+                    fps: 15, // Aumentado para maior fluidez
+                    qrbox: (viewfinderWidth, viewfinderHeight) => {
+                        // Dinâmico: ocupa 80% da largura, height proporcional
+                        const width = viewfinderWidth * 0.8;
+                        return { width, height: width * 0.6 };
                     },
-                    (decodedText) => {
-                        // Play success sound
-                        const audio = new Audio('/beep.mp3'); // Optional, if you have one, or use verify sound logic
-                        // Just use toast for now
-                        addItem(decodedText);
-                        toast.success("ID escaneado!");
-                    },
-                    (errorMessage) => {
-                        // ignore errors
-                    }
-                );
-                setIsScannerActive(true);
-            } else {
-                toast.error("Nenhuma câmera encontrada.");
-            }
+                    aspectRatio: 1.0,
+                },
+                (decodedText) => {
+                    // Scan Success
+                    if (isProcessingRef.current) return;
+                    isProcessingRef.current = true;
+
+                    setTimeout(() => {
+                        isProcessingRef.current = false;
+                    }, 1500);
+
+                    addItem(decodedText);
+                    toast.success("ID escaneado!");
+                },
+                (errorMessage) => {
+                    // ignore errors
+                }
+            );
+            setIsScannerActive(true);
         } catch (err) {
             console.error("Erro no scanner:", err);
             toast.error("Erro ao iniciar scanner.");
@@ -681,7 +675,23 @@ const Flex = () => {
                                 </h3>
 
                                 <div className="flex flex-col gap-3">
+                                    <input
+                                        type="text"
+                                        value={sendIdInput}
+                                        onChange={(e) => setSendIdInput(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && addItem(sendIdInput)}
+                                        placeholder="Digite ou escaneie o ID..."
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+
                                     <div className="flex gap-2">
+                                        <button
+                                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2"
+                                            onClick={() => addItem(sendIdInput)}
+                                        >
+                                            <PlusCircle size={18} /> Adicionar ID
+                                        </button>
+
                                         <button
                                             className={`p-3 rounded-lg border transition-colors ${isScannerActive
                                                 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse'
@@ -691,23 +701,7 @@ const Flex = () => {
                                         >
                                             {isScannerActive ? <StopCircle size={20} /> : <ScanBarcode size={20} />}
                                         </button>
-
-                                        <input
-                                            type="text"
-                                            value={sendIdInput}
-                                            onChange={(e) => setSendIdInput(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && addItem(sendIdInput)}
-                                            placeholder="Digite ou escaneie o ID..."
-                                            className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                        />
                                     </div>
-
-                                    <button
-                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2"
-                                        onClick={() => addItem(sendIdInput)}
-                                    >
-                                        <PlusCircle size={18} /> Adicionar ID
-                                    </button>
                                 </div>
 
                                 <div className="mt-2 flex items-center gap-2">
@@ -735,7 +729,9 @@ const Flex = () => {
                             <div className="flex-items-list mb-6">
                                 <h3 className="flex items-center gap-2 mb-3 font-semibold text-gray-700">
                                     <List size={18} /> Itens do Relatório
-                                    <span className="flex-report-items-count ml-2">{reportForm.items.length} itens</span>
+                                    <span className="ml-auto bg-blue-600 text-white text-sm font-bold px-3 py-1 rounded-full shadow-sm">
+                                        {reportForm.items.length} {reportForm.items.length === 1 ? 'item' : 'itens'}
+                                    </span>
                                 </h3>
                                 <div className="max-h-60 overflow-auto border rounded-lg">
                                     <table className="flex-items-table mb-0">

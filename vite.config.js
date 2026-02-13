@@ -12,6 +12,11 @@ export default defineConfig({
                 enabled: true
             },
             includeAssets: ['pwa-icon.svg'],
+            workbox: {
+                globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+                navigateFallback: '/appsi-modern/index.html',
+                navigateFallbackAllowlist: [/^(?!\/__).*/]
+            },
             manifest: {
                 name: 'Appsi Modern',
                 short_name: 'Appsi',

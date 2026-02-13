@@ -210,54 +210,37 @@ export default function Verification() {
             const html5QrCode = new Html5Qrcode(elementId);
             html5QrCodeRef.current = html5QrCode;
 
-            const devices = await Html5Qrcode.getCameras();
-
-            if (devices && devices.length) {
-                let cameraId = devices[0].deviceId;
-                // Try to find back camera
-                const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('traseira'));
-                if (backCamera) cameraId = backCamera.deviceId;
-
-                await html5QrCode.start(
-                    cameraId,
-                    {
-                        fps: 10,
-                        qrbox: { width: 250, height: 100 },
-                        aspectRatio: 1.0,
-                        formatsToSupport: [
-                            Html5QrcodeSupportedFormats.CODE_128,
-                            Html5QrcodeSupportedFormats.EAN_13,
-                            Html5QrcodeSupportedFormats.UPC_A,
-                            Html5QrcodeSupportedFormats.QR_CODE
-                        ]
+            await html5QrCode.start(
+                { facingMode: "environment" },
+                {
+                    fps: 15, // Aumentado para maior fluidez
+                    qrbox: (viewfinderWidth, viewfinderHeight) => {
+                        // Dinâmico: ocupa 80% da largura, height proporcional
+                        const width = viewfinderWidth * 0.8;
+                        return { width, height: width * 0.5 }; // Um pouco menor que no Flex por ser apenas um campo
                     },
-                    (decodedText) => {
-                        // Scan Success
-                        if (isProcessingRef.current) return;
+                    aspectRatio: 1.0,
+                },
+                (decodedText) => {
+                    // Scan Success
+                    if (isProcessingRef.current) return;
+                    isProcessingRef.current = true;
 
-                        isProcessingRef.current = true;
+                    setTimeout(() => {
+                        isProcessingRef.current = false;
+                    }, 2000);
 
-                        // Small timeout to prevent immediate double scan of same code
-                        setTimeout(() => {
-                            isProcessingRef.current = false;
-                        }, 2000);
-
-                        handleSearch(null, decodedText).then((status) => {
-                            if (status === 'error' || status === 'duplicate') {
-                                // Stop scanner on error/duplicate as requested
-                                stopScanner();
-                            }
-                            // Else: continue scanning (status === 'success')
-                        });
-                    },
-                    (errorMessage) => {
-                        // ignore errors
-                    }
-                );
-                setIsScannerActive(true);
-            } else {
-                toast.error("Nenhuma câmera encontrada.");
-            }
+                    handleSearch(null, decodedText).then((status) => {
+                        if (status === 'error' || status === 'duplicate') {
+                            stopScanner();
+                        }
+                    });
+                },
+                (errorMessage) => {
+                    // ignore
+                }
+            );
+            setIsScannerActive(true);
         } catch (err) {
             console.error("Erro no scanner:", err);
             toast.error("Erro ao iniciar scanner.");
