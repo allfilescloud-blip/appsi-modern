@@ -42,8 +42,7 @@ const Flex = () => {
     const [reports, setReports] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [dateFrom, setDateFrom] = useState('');
-    const [dateTo, setDateTo] = useState('');
+    const [filterDate, setFilterDate] = useState('');
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -236,7 +235,26 @@ const Flex = () => {
         if (isScannerActive) return;
 
         try {
-            html5QrCodeRef.current = new Html5Qrcode("reader");
+            // Ensure unique ID for this component instance
+            const elementId = "flex-reader";
+
+            // Cleanup existing instance if any
+            if (html5QrCodeRef.current) {
+                try {
+                    await html5QrCodeRef.current.stop();
+                    await html5QrCodeRef.current.clear();
+                } catch (e) {
+                    console.warn("Scanner Cleanup Error:", e);
+                }
+                html5QrCodeRef.current = null;
+            }
+
+            // Small delay to ensure DOM is ready and state updated
+            await new Promise(r => setTimeout(r, 100));
+
+            const html5QrCode = new Html5Qrcode(elementId);
+            html5QrCodeRef.current = html5QrCode;
+
             const devices = await Html5Qrcode.getCameras();
 
             if (devices && devices.length) {
@@ -245,11 +263,12 @@ const Flex = () => {
                 const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('traseira'));
                 if (backCamera) cameraId = backCamera.deviceId;
 
-                await html5QrCodeRef.current.start(
+                await html5QrCode.start(
                     cameraId,
                     {
                         fps: 10,
-                        qrbox: { width: 250, height: 100 },
+                        qrbox: { width: 250, height: 150 },
+                        aspectRatio: 1.0,
                         formatsToSupport: [
                             Html5QrcodeSupportedFormats.CODE_128,
                             Html5QrcodeSupportedFormats.EAN_13,
@@ -258,6 +277,9 @@ const Flex = () => {
                         ]
                     },
                     (decodedText) => {
+                        // Play success sound
+                        const audio = new Audio('/beep.mp3'); // Optional, if you have one, or use verify sound logic
+                        // Just use toast for now
                         addItem(decodedText);
                         toast.success("ID escaneado!");
                     },
@@ -277,13 +299,20 @@ const Flex = () => {
     };
 
     const stopScanner = async () => {
-        if (html5QrCodeRef.current && isScannerActive) {
+        if (html5QrCodeRef.current) {
             try {
-                await html5QrCodeRef.current.stop();
-                setIsScannerActive(false);
+                if (isScannerActive) {
+                    await html5QrCodeRef.current.stop();
+                }
+                await html5QrCodeRef.current.clear();
             } catch (err) {
                 console.error("Erro ao parar scanner:", err);
+            } finally {
+                html5QrCodeRef.current = null;
+                setIsScannerActive(false);
             }
+        } else {
+            setIsScannerActive(false);
         }
     };
 
@@ -455,15 +484,11 @@ const Flex = () => {
             (r.items && r.items.some(i => i.sendId.toLowerCase().includes(searchTerm.toLowerCase())));
 
         let matchesDate = true;
-        if (dateFrom || dateTo) {
+        if (filterDate) {
             const rDate = new Date(r.createdAt);
-            if (dateFrom && rDate < new Date(dateFrom)) matchesDate = false;
-            // Add a day to dateTo to include the end date fully
-            if (dateTo) {
-                const nextDay = new Date(dateTo);
-                nextDay.setDate(nextDay.getDate() + 1);
-                if (rDate >= nextDay) matchesDate = false;
-            }
+            // Compare YYYY-MM-DD
+            const rDateStr = rDate.toISOString().split('T')[0];
+            if (rDateStr !== filterDate) matchesDate = false;
         }
 
         return matchesTerm && matchesDate;
@@ -500,30 +525,20 @@ const Flex = () => {
                         />
                     </div>
 
-                    <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-lg border border-gray-200 overflow-x-auto">
-                        <div className="flex items-center gap-2 px-2 whitespace-nowrap">
-                            <span className="text-sm font-medium text-gray-600">De:</span>
-                            <input
-                                type="date"
-                                value={dateFrom}
-                                onChange={(e) => setDateFrom(e.target.value)}
-                                className="border border-gray-300 rounded text-sm p-1 focus:ring-2 focus:ring-blue-500 outline-none"
-                            />
-                            <span className="text-sm font-medium text-gray-600">até</span>
-                            <input
-                                type="date"
-                                value={dateTo}
-                                onChange={(e) => setDateTo(e.target.value)}
-                                className="border border-gray-300 rounded text-sm p-1 focus:ring-2 focus:ring-blue-500 outline-none"
-                            />
-                        </div>
-                        {(dateFrom || dateTo || searchTerm) && (
+                    <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                        <span className="text-sm font-medium text-gray-600 whitespace-nowrap">Data:</span>
+                        <input
+                            type="date"
+                            value={filterDate}
+                            onChange={(e) => setFilterDate(e.target.value)}
+                            className="border border-gray-300 rounded text-sm p-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                        />
+                        {(filterDate || searchTerm) && (
                             <button
                                 className="text-gray-400 hover:text-red-500 p-2 transition-colors"
                                 onClick={() => {
                                     setSearchTerm('');
-                                    setDateFrom('');
-                                    setDateTo('');
+                                    setFilterDate('');
                                 }}
                                 title="Limpar filtros"
                             >
@@ -657,52 +672,63 @@ const Flex = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex-scanner-btn-container">
-                                    <button
-                                        className={`flex-quick-scanner-btn ${isScannerActive ? 'active' : ''}`}
-                                        onClick={toggleScanner}
-                                        title={isScannerActive ? 'Parar Scanner' : 'Iniciar Scanner'}
-                                    >
-                                        {isScannerActive ? <StopCircle /> : <ScanBarcode />}
-                                    </button>
-                                </div>
                             </div>
 
-                            {/* ID Input Section */}
-                            <div className="flex-id-input-section">
-                                <h3 className="flex items-center gap-2 mb-3 font-semibold text-gray-700">
-                                    <ScanBarcode size={18} className="text-blue-600" /> Adicionar ID de Envio
+                            {/* ID Input Section - New Layout */}
+                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-4">
+                                <h3 className="flex items-center gap-2 mb-2 font-semibold text-gray-700 text-sm">
+                                    <ScanBarcode size={16} className="text-blue-600" /> Adicionar ID
                                 </h3>
-                                <div className="flex-add-id-container">
-                                    <input
-                                        type="text"
-                                        value={sendIdInput}
-                                        onChange={(e) => setSendIdInput(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && addItem(sendIdInput)}
-                                        placeholder="Digite ou escaneie..."
-                                    />
-                                    <button className="flex-add-id-btn" onClick={() => addItem(sendIdInput)}>
-                                        <PlusCircle />
+
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex gap-2">
+                                        <button
+                                            className={`p-3 rounded-lg border transition-colors ${isScannerActive
+                                                ? 'bg-red-50 border-red-200 text-red-600 animate-pulse'
+                                                : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                                            onClick={toggleScanner}
+                                            title={isScannerActive ? 'Parar Scanner' : 'Abrir Câmera'}
+                                        >
+                                            {isScannerActive ? <StopCircle size={20} /> : <ScanBarcode size={20} />}
+                                        </button>
+
+                                        <input
+                                            type="text"
+                                            value={sendIdInput}
+                                            onChange={(e) => setSendIdInput(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && addItem(sendIdInput)}
+                                            placeholder="Digite ou escaneie o ID..."
+                                            className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                    </div>
+
+                                    <button
+                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2"
+                                        onClick={() => addItem(sendIdInput)}
+                                    >
+                                        <PlusCircle size={18} /> Adicionar ID
                                     </button>
                                 </div>
-                                <div className="flex-ml-label-checkbox">
+
+                                <div className="mt-2 flex items-center gap-2">
                                     <input
                                         type="checkbox"
                                         id="ml-label"
                                         checked={useMlLabel}
                                         onChange={(e) => setUseMlLabel(e.target.checked)}
+                                        className="rounded text-blue-600 focus:ring-blue-500"
                                     />
-                                    <label htmlFor="ml-label">Etiqueta ML (Extrair ID do JSON)</label>
+                                    <label htmlFor="ml-label" className="text-xs text-gray-600 cursor-pointer select-none">Extrair ID de etiqueta ML (JSON)</label>
                                 </div>
                             </div>
 
                             {/* Scanner View */}
                             <div
-                                className="flex-scanner-container"
+                                className="mb-4 overflow-hidden rounded-xl bg-black"
                                 style={{ display: isScannerActive ? 'block' : 'none' }}
                             >
-                                <div id="reader"></div>
-                                <p className="text-center text-sm mt-2 text-gray-500">Aponte a câmera para um código</p>
+                                <div id="flex-reader" className="w-full"></div>
+                                <p className="text-center text-white py-2 text-sm bg-black">Aponte para o código de barras</p>
                             </div>
 
                             {/* Items List */}
@@ -767,84 +793,97 @@ const Flex = () => {
                             </div>
 
                             {/* Actions */}
-                            <div className="flex gap-3 mt-4">
-                                <button className="flex-btn flex-btn-success flex-1 justify-center" onClick={saveReport}>
-                                    <Save size={18} /> Salvar
+                            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                                <button
+                                    className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                                    onClick={closeReportModal}
+                                >
+                                    Cancelar
                                 </button>
-                                <button className="flex-btn flex-btn-secondary flex-1 justify-center" onClick={closeReportModal}>
-                                    <X size={18} /> Cancelar
+                                <button
+                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm flex items-center gap-2 transition-all disabled:opacity-70"
+                                    onClick={saveReport}
+                                >
+                                    <Save size={18} /> Salvar Relatório
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
-            )}
+            )
+            }
 
             {/* Modal View Observation */}
-            {isObservationModalOpen && observationViewData && (
-                <div className="flex-modal">
-                    <div className="flex-modal-content" style={{ maxWidth: '500px' }}>
-                        <div className="flex-modal-header">
-                            <h2><MessageSquare size={20} /> Observação</h2>
-                            <button className="flex-close-modal" onClick={() => setIsObservationModalOpen(false)}>
-                                <X size={24} />
-                            </button>
-                        </div>
-                        <div className="flex-modal-body">
-                            <h3 className="font-bold mb-2">{observationViewData.alias}</h3>
-                            <div className="bg-gray-50 p-4 rounded-lg text-gray-700 whitespace-pre-wrap">
-                                {observationViewData.generalObservation}
+            {
+                isObservationModalOpen && observationViewData && (
+                    <div className="flex-modal">
+                        <div className="flex-modal-content" style={{ maxWidth: '500px' }}>
+                            <div className="flex-modal-header">
+                                <h2><MessageSquare size={20} /> Observação</h2>
+                                <button className="flex-close-modal" onClick={() => setIsObservationModalOpen(false)}>
+                                    <X size={24} />
+                                </button>
                             </div>
-                            <div className="mt-4 text-right">
-                                <button
-                                    className="flex-btn flex-btn-secondary"
-                                    onClick={() => setIsObservationModalOpen(false)}
-                                >
-                                    Fechar
+                            <div className="flex-modal-body">
+                                <h3 className="font-bold mb-2">{observationViewData.alias}</h3>
+                                <div className="bg-gray-50 p-4 rounded-lg text-gray-700 whitespace-pre-wrap">
+                                    {observationViewData.generalObservation}
+                                </div>
+                                <div className="mt-4 text-right">
+                                    <button
+                                        className="flex-btn flex-btn-secondary"
+                                        onClick={() => setIsObservationModalOpen(false)}
+                                    >
+                                        Fechar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* Confirm Delete */}
+            {
+                isDeleteConfirmOpen && (
+                    <div className="flex-modal">
+                        <div className="bg-white p-6 rounded-lg max-w-sm w-full text-center shadow-xl">
+                            <AlertTriangle size={48} className="text-red-500 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold mb-2">Excluir Relatório?</h3>
+                            <p className="text-gray-600 mb-6">Esta ação não pode ser desfeita.</p>
+                            <div className="flex gap-3 justify-center">
+                                <button className="flex-btn flex-btn-danger" onClick={deleteReport}>Sim, Excluir</button>
+                                <button className="flex-btn flex-btn-secondary" onClick={() => setIsDeleteConfirmOpen(false)}>Cancelar</button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* Confirm Print After Save */}
+            {
+                isPrintConfirmOpen && lastSavedReport && (
+                    <div className="flex-modal">
+                        <div className="bg-white p-6 rounded-lg max-w-sm w-full text-center shadow-xl">
+                            <CheckCircle size={48} className="text-green-500 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold mb-2">Salvo com Sucesso!</h3>
+                            <p className="text-gray-600 mb-6">Deseja imprimir agora?</p>
+                            <div className="flex gap-3 justify-center">
+                                <button className="flex-btn flex-btn-info" onClick={() => {
+                                    handlePrint(lastSavedReport);
+                                    setIsPrintConfirmOpen(false);
+                                }}>
+                                    <Printer size={18} /> Imprimir
+                                </button>
+                                <button className="flex-btn flex-btn-secondary" onClick={() => setIsPrintConfirmOpen(false)}>
+                                    Agora não
                                 </button>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
-
-            {/* Confirm Delete */}
-            {isDeleteConfirmOpen && (
-                <div className="flex-modal">
-                    <div className="bg-white p-6 rounded-lg max-w-sm w-full text-center shadow-xl">
-                        <AlertTriangle size={48} className="text-red-500 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold mb-2">Excluir Relatório?</h3>
-                        <p className="text-gray-600 mb-6">Esta ação não pode ser desfeita.</p>
-                        <div className="flex gap-3 justify-center">
-                            <button className="flex-btn flex-btn-danger" onClick={deleteReport}>Sim, Excluir</button>
-                            <button className="flex-btn flex-btn-secondary" onClick={() => setIsDeleteConfirmOpen(false)}>Cancelar</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Confirm Print After Save */}
-            {isPrintConfirmOpen && lastSavedReport && (
-                <div className="flex-modal">
-                    <div className="bg-white p-6 rounded-lg max-w-sm w-full text-center shadow-xl">
-                        <CheckCircle size={48} className="text-green-500 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold mb-2">Salvo com Sucesso!</h3>
-                        <p className="text-gray-600 mb-6">Deseja imprimir agora?</p>
-                        <div className="flex gap-3 justify-center">
-                            <button className="flex-btn flex-btn-info" onClick={() => {
-                                handlePrint(lastSavedReport);
-                                setIsPrintConfirmOpen(false);
-                            }}>
-                                <Printer size={18} /> Imprimir
-                            </button>
-                            <button className="flex-btn flex-btn-secondary" onClick={() => setIsPrintConfirmOpen(false)}>
-                                Agora não
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

@@ -192,7 +192,24 @@ export default function Verification() {
         if (isScannerActive) return;
 
         try {
-            html5QrCodeRef.current = new Html5Qrcode("verification-reader");
+            const elementId = "verification-reader";
+
+            if (html5QrCodeRef.current) {
+                try {
+                    await html5QrCodeRef.current.stop();
+                    await html5QrCodeRef.current.clear();
+                } catch (e) {
+                    console.warn("Scanner Cleanup Error:", e);
+                }
+                html5QrCodeRef.current = null;
+            }
+
+            // Small delay to ensure DOM is ready
+            await new Promise(r => setTimeout(r, 100));
+
+            const html5QrCode = new Html5Qrcode(elementId);
+            html5QrCodeRef.current = html5QrCode;
+
             const devices = await Html5Qrcode.getCameras();
 
             if (devices && devices.length) {
@@ -201,11 +218,12 @@ export default function Verification() {
                 const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('traseira'));
                 if (backCamera) cameraId = backCamera.deviceId;
 
-                await html5QrCodeRef.current.start(
+                await html5QrCode.start(
                     cameraId,
                     {
                         fps: 10,
                         qrbox: { width: 250, height: 100 },
+                        aspectRatio: 1.0,
                         formatsToSupport: [
                             Html5QrcodeSupportedFormats.CODE_128,
                             Html5QrcodeSupportedFormats.EAN_13,
@@ -248,13 +266,20 @@ export default function Verification() {
     };
 
     const stopScanner = async () => {
-        if (html5QrCodeRef.current && isScannerActive) {
+        if (html5QrCodeRef.current) {
             try {
-                await html5QrCodeRef.current.stop();
-                setIsScannerActive(false);
+                if (isScannerActive) {
+                    await html5QrCodeRef.current.stop();
+                }
+                await html5QrCodeRef.current.clear();
             } catch (err) {
                 console.error("Erro ao parar scanner:", err);
+            } finally {
+                html5QrCodeRef.current = null;
+                setIsScannerActive(false);
             }
+        } else {
+            setIsScannerActive(false);
         }
     };
 

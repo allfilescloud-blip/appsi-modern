@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/appsi-modern/sw.js', { scope: '/appsi-modern/' })})}
