@@ -108,13 +108,25 @@ export default function Layout({ children }) {
                     )}
 
                     {isExpanded && (
-                        <button
-                            onClick={togglePin}
-                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title={isPinned ? "Desafixar menu" : "Fixar menu"}
-                        >
-                            {isPinned ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
-                        </button>
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => toast.info(`Você tem ${userTicketCount} chamados ativos.`)}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors relative"
+                                title="Notificações"
+                            >
+                                <Bell className="w-4 h-4" />
+                                {userTicketCount > 0 && (
+                                    <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full border border-white"></span>
+                                )}
+                            </button>
+                            <button
+                                onClick={togglePin}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title={isPinned ? "Desafixar menu" : "Fixar menu"}
+                            >
+                                {isPinned ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -153,25 +165,13 @@ export default function Layout({ children }) {
                     </div>
 
                     {isExpanded ? (
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => toast.info(`Você tem ${userTicketCount} chamados ativos.`)}
-                                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors relative"
-                                title="Notificações"
-                            >
-                                <Bell className="w-4 h-4" />
-                                {userTicketCount > 0 && (
-                                    <span className="absolute top-1 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-                                )}
-                            </button>
-                            <button
-                                onClick={handleLogout}
-                                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            >
-                                <LogOut className="w-4 h-4" />
-                                Sair
-                            </button>
-                        </div>
+                        <button
+                            onClick={handleLogout}
+                            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                            <LogOut className="w-4 h-4" />
+                            Sair
+                        </button>
                     ) : (
                         <button
                             onClick={handleLogout}
