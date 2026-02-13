@@ -243,7 +243,12 @@ export default function Verification() {
             setIsScannerActive(true);
         } catch (err) {
             console.error("Erro no scanner:", err);
-            toast.error("Erro ao iniciar scanner.");
+            const errorStr = err.toString();
+            if (err.name === 'NotAllowedError' || errorStr.includes('Permission denied') || errorStr.includes('NotAllowedError')) {
+                toast.error("Permissão de câmera negada. Por favor, habilite o acesso nas configurações do seu navegador.");
+            } else {
+                toast.error("Erro ao iniciar scanner.");
+            }
             setIsScannerActive(false);
         }
     };

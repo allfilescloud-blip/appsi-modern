@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { HashRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
 import { ToastContainer } from "react-toastify";
@@ -24,7 +24,7 @@ const Loading = () => <div className="flex items-center justify-center h-screen 
 function App() {
     return (
         <AuthProvider>
-            <Router basename="/appsi-modern" future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                 <Suspense fallback={<Loading />}>
                     <Routes>
                         <Route path="/login" element={<Login />} />
