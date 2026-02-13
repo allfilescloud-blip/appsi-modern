@@ -17,6 +17,7 @@ export default function Verification() {
     // Scanner State
     const [isScannerActive, setIsScannerActive] = useState(false);
     const html5QrCodeRef = useRef(null);
+    const fileInputRef = useRef(null);
 
     const inputRef = useRef(null);
 
@@ -210,49 +211,80 @@ export default function Verification() {
             const html5QrCode = new Html5Qrcode(elementId);
             html5QrCodeRef.current = html5QrCode;
 
-            await html5QrCode.start(
-                { facingMode: "environment" },
-                {
-                    fps: 15,
-                    qrbox: (viewfinderWidth, viewfinderHeight) => {
-                        // Dimensões seguras: Garante mínima de 150x100 para evitar erro de 50px
-                        const minWidth = 150;
-                        const minHeight = 100;
-                        const width = Math.floor(Math.min(viewfinderWidth * 0.8, Math.max(minWidth, viewfinderWidth)));
-                        const height = Math.floor(Math.min(width * 0.5, Math.max(minHeight, viewfinderHeight)));
-                        return { width, height };
-                    },
-                    aspectRatio: 1.0,
+            const config = {
+                fps: 15,
+                qrbox: (viewfinderWidth, viewfinderHeight) => {
+                    const minSize = 150;
+                    const width = Math.floor(Math.min(viewfinderWidth * 0.8, Math.max(minSize, viewfinderWidth)));
+                    const height = Math.floor(Math.min(width * 0.5, Math.max(minSize, viewfinderHeight)));
+                    return { width, height };
                 },
-                (decodedText) => {
-                    // Scan Success
-                    if (isProcessingRef.current) return;
-                    isProcessingRef.current = true;
+                aspectRatio: 1.0,
+            };
 
-                    setTimeout(() => {
-                        isProcessingRef.current = false;
-                    }, 2000);
+            const successCallback = (decodedText) => {
+                if (isProcessingRef.current) return;
+                isProcessingRef.current = true;
+                setTimeout(() => { isProcessingRef.current = false; }, 2000);
 
-                    handleSearch(null, decodedText).then((status) => {
-                        if (status === 'error' || status === 'duplicate') {
-                            stopScanner();
-                        }
-                    });
-                },
-                (errorMessage) => {
-                    // ignore
+                handleSearch(null, decodedText).then((status) => {
+                    if (status === 'error' || status === 'duplicate') {
+                        stopScanner();
+                    }
+                });
+            };
+
+            try {
+                // Tentativa 1: Câmera traseira nativa
+                await html5QrCode.start({ facingMode: "environment" }, config, successCallback);
+                setIsScannerActive(true);
+            } catch (firstErr) {
+                console.warn("Falha ao iniciar com facingMode no Verification, tentando fallback...", firstErr);
+                try {
+                    // Tentativa 2: Listar câmeras e pegar a última
+                    const devices = await Html5Qrcode.getCameras();
+                    if (devices && devices.length > 0) {
+                        const cameraId = devices[devices.length - 1].id;
+                        await html5QrCode.start(cameraId, config, successCallback);
+                        setIsScannerActive(true);
+                    } else {
+                        throw new Error("Nenhuma câmera encontrada.");
+                    }
+                } catch (secondErr) {
+                    console.error("Erro total no scanner do Verification:", secondErr);
+                    const errorStr = secondErr.toString();
+                    if (secondErr.name === 'NotAllowedError' || errorStr.includes('Permission denied')) {
+                        toast.error("Acesso à câmera negado. Use 'Upload de Foto' ou verifique as permissões.");
+                    } else {
+                        toast.error("Não foi possível acessar a câmera. Tente 'Upload'.");
+                    }
+                    setIsScannerActive(false);
                 }
-            );
-            setIsScannerActive(true);
-        } catch (err) {
-            console.error("Erro no scanner:", err);
-            const errorStr = err.toString();
-            if (err.name === 'NotAllowedError' || errorStr.includes('Permission denied') || errorStr.includes('NotAllowedError')) {
-                toast.error("Permissão de câmera negada. Por favor, habilite o acesso nas configurações do seu navegador.");
-            } else {
-                toast.error("Erro ao iniciar scanner.");
             }
+        } catch (err) {
+            console.error("Erro crítico no scanner do Verification:", err);
+            toast.error("Erro de configuração do scanner.");
             setIsScannerActive(false);
+        }
+    };
+
+    const handleImageUpload = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!html5QrCodeRef.current) {
+            html5QrCodeRef.current = new Html5Qrcode("verification-reader");
+        }
+
+        try {
+            const decodedText = await html5QrCodeRef.current.scanFile(file, true);
+            handleSearch(null, decodedText);
+            toast.success("Código extraído!");
+        } catch (err) {
+            console.error("Erro ao ler imagem:", err);
+            toast.error("Nenhum código encontrado na imagem.");
+        } finally {
+            if (event.target) event.target.value = "";
         }
     };
 
@@ -369,13 +401,31 @@ export default function Verification() {
                     </form>
 
                     {/* Scanner View */}
-                    <div
-                        className="mt-4 overflow-hidden rounded-xl bg-black"
-                        style={{ display: isScannerActive ? 'block' : 'none' }}
-                    >
-                        <div id="verification-reader" className="w-full"></div>
-                        <p className="text-center text-white py-2 text-sm">Aponte para o código de barras</p>
-                    </div>
+                    {isScannerActive && (
+                        <div className="mt-4 overflow-hidden rounded-xl bg-black relative">
+                            <div
+                                id="verification-reader"
+                                className="w-full"
+                                style={{ width: '100%', minHeight: '300px' }}
+                            ></div>
+                            <p className="text-center text-white py-2 text-sm">Aponte para o código de barras</p>
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="absolute top-2 right-2 bg-blue-600/80 hover:bg-blue-600 text-white p-2 rounded-lg backdrop-blur-sm transition-colors flex items-center gap-2 text-sm"
+                                title="Faz upload de uma imagem se a câmera falhar"
+                            >
+                                <Camera size={16} />
+                                <span>Upload</span>
+                            </button>
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                accept="image/*"
+                                onChange={handleImageUpload}
+                            />
+                        </div>
+                    )}
 
                     <div className="flex justify-end gap-3 mt-4">
                         <button
@@ -411,10 +461,8 @@ export default function Verification() {
                             </div>
 
                             <div className="flex items-center gap-4">
-                                {lastResult.type === 'success' ? (
-                                    <CheckCircle className="w-24 h-24 text-green-500 opacity-20" />
                                 ) : (
-                                    <XCircle className="w-24 h-24 text-red-500 opacity-20" />
+                                <XCircle className="w-24 h-24 text-red-500 opacity-20" />
                                 )}
                             </div>
                         </div>

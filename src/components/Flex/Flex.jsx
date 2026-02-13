@@ -68,6 +68,7 @@ const Flex = () => {
     const [isScannerActive, setIsScannerActive] = useState(false);
     const scannerRef = useRef(null);
     const html5QrCodeRef = useRef(null);
+    const fileInputRef = useRef(null);
 
     // Print State
     const [lastSavedReport, setLastSavedReport] = useState(null);
@@ -257,46 +258,76 @@ const Flex = () => {
             const html5QrCode = new Html5Qrcode(elementId);
             html5QrCodeRef.current = html5QrCode;
 
-            await html5QrCode.start(
-                { facingMode: "environment" },
-                {
-                    fps: 15,
-                    qrbox: (viewfinderWidth, viewfinderHeight) => {
-                        // Dimensões seguras: Garante mínima de 150x100 para evitar erro de 50px
-                        const minWidth = 150;
-                        const minHeight = 100;
-                        const width = Math.floor(Math.min(viewfinderWidth * 0.8, Math.max(minWidth, viewfinderWidth)));
-                        const height = Math.floor(Math.min(width * 0.6, Math.max(minHeight, viewfinderHeight)));
-                        return { width, height };
-                    },
-                    aspectRatio: 1.0,
+            const config = {
+                fps: 15,
+                qrbox: (viewfinderWidth, viewfinderHeight) => {
+                    const minSize = 150;
+                    const width = Math.floor(Math.min(viewfinderWidth * 0.8, Math.max(minSize, viewfinderWidth)));
+                    const height = Math.floor(Math.min(width * 0.6, Math.max(minSize, viewfinderHeight)));
+                    return { width, height };
                 },
-                (decodedText) => {
-                    // Scan Success
-                    if (isProcessingRef.current) return;
-                    isProcessingRef.current = true;
+                aspectRatio: 1.0,
+            };
 
-                    setTimeout(() => {
-                        isProcessingRef.current = false;
-                    }, 1500);
+            const successCallback = (decodedText) => {
+                if (isProcessingRef.current) return;
+                isProcessingRef.current = true;
+                setTimeout(() => { isProcessingRef.current = false; }, 1500);
+                addItem(decodedText);
+                toast.success("Código lido!");
+            };
 
-                    addItem(decodedText);
-                    toast.success("ID escaneado!");
-                },
-                (errorMessage) => {
-                    // ignore errors
+            try {
+                // Tentativa 1: Câmera traseira nativa
+                await html5QrCode.start({ facingMode: "environment" }, config, successCallback);
+                setIsScannerActive(true);
+            } catch (firstErr) {
+                console.warn("Falha ao iniciar com facingMode, tentando fallback...", firstErr);
+                try {
+                    // Tentativa 2: Listar câmeras e pegar a última (geralmente a traseira)
+                    const devices = await Html5Qrcode.getCameras();
+                    if (devices && devices.length > 0) {
+                        const cameraId = devices[devices.length - 1].id;
+                        await html5QrCode.start(cameraId, config, successCallback);
+                        setIsScannerActive(true);
+                    } else {
+                        throw new Error("Nenhuma câmera encontrada.");
+                    }
+                } catch (secondErr) {
+                    console.error("Erro total no scanner:", secondErr);
+                    const errorStr = secondErr.toString();
+                    if (secondErr.name === 'NotAllowedError' || errorStr.includes('Permission denied')) {
+                        toast.error("Permissão de câmera negada. Habilite o acesso ou use a opção de 'Upload de Foto'.");
+                    } else {
+                        toast.error("Não foi possível acessar a câmera. Tente a opção de 'Upload'.");
+                    }
+                    setIsScannerActive(false);
                 }
-            );
-            setIsScannerActive(true);
-        } catch (err) {
-            console.error("Erro no scanner:", err);
-            const errorStr = err.toString();
-            if (err.name === 'NotAllowedError' || errorStr.includes('Permission denied') || errorStr.includes('NotAllowedError')) {
-                toast.error("Permissão de câmera negada. Por favor, habilite o acesso nas configurações do seu navegador.");
-            } else {
-                toast.error("Erro ao iniciar scanner.");
             }
+        } catch (err) {
+            console.error("Erro crítico no scanner:", err);
+            toast.error("Erro ao configurar scanner.");
             setIsScannerActive(false);
+        }
+    };
+
+    const handleImageUpload = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!html5QrCodeRef.current) {
+            html5QrCodeRef.current = new Html5Qrcode("flex-reader");
+        }
+
+        try {
+            const decodedText = await html5QrCodeRef.current.scanFile(file, true);
+            addItem(decodedText);
+            toast.success("Código extraído da imagem!");
+        } catch (err) {
+            console.error("Erro ao ler imagem:", err);
+            toast.error("Não foi possível ler um código nesta imagem.");
+        } finally {
+            if (event.target) event.target.value = ""; // Reset input
         }
     };
 
@@ -726,11 +757,27 @@ const Flex = () => {
 
                             {/* Scanner View */}
                             <div
-                                className="mb-4 overflow-hidden rounded-xl bg-black"
+                                className="mb-4 overflow-hidden rounded-xl bg-black relative"
                                 style={{ display: isScannerActive ? 'block' : 'none' }}
                             >
                                 <div id="flex-reader" className="w-full"></div>
                                 <p className="text-center text-white py-2 text-sm bg-black">Aponte para o código de barras</p>
+
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="absolute top-2 right-2 bg-blue-600/80 hover:bg-blue-600 text-white p-2 rounded-lg backdrop-blur-sm transition-colors flex items-center gap-2 text-xs"
+                                    title="Upload de imagem se a câmera falhar"
+                                >
+                                    <Camera size={14} />
+                                    <span>Upload</span>
+                                </button>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    className="hidden"
+                                    accept="image/*"
+                                    onChange={handleImageUpload}
+                                />
                             </div>
 
                             {/* Items List */}
