@@ -213,11 +213,14 @@ export default function Verification() {
             await html5QrCode.start(
                 { facingMode: "environment" },
                 {
-                    fps: 15, // Aumentado para maior fluidez
+                    fps: 15,
                     qrbox: (viewfinderWidth, viewfinderHeight) => {
-                        // Dinâmico: ocupa 80% da largura, height proporcional
-                        const width = Math.max(50, viewfinderWidth * 0.8);
-                        return { width, height: Math.max(50, width * 0.5) }; // Um pouco menor que no Flex por ser apenas um campo
+                        // Dimensões seguras: Garante mínima de 150x100 para evitar erro de 50px
+                        const minWidth = 150;
+                        const minHeight = 100;
+                        const width = Math.floor(Math.min(viewfinderWidth * 0.8, Math.max(minWidth, viewfinderWidth)));
+                        const height = Math.floor(Math.min(width * 0.5, Math.max(minHeight, viewfinderHeight)));
+                        return { width, height };
                     },
                     aspectRatio: 1.0,
                 },

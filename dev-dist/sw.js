@@ -81,11 +81,11 @@ define(['./workbox-5a5d9309'], (function (workbox) { 'use strict';
     "url": "registerSW.js",
     "revision": "c7b7c9f651c99892e42e94cdabf89993"
   }, {
-    "url": "index.html",
-    "revision": "0.dc9kadpjjhg"
+    "url": "/appsi-modern/index.html",
+    "revision": "0.54cv9cokcho"
   }], {});
   workbox.cleanupOutdatedCaches();
-  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
+  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/appsi-modern/index.html"), {
     allowlist: [/^\/$/]
   }));
 
