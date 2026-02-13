@@ -21,6 +21,8 @@ import {
     Legend,
     ArcElement,
 } from 'chart.js';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 ChartJS.register(
     CategoryScale,
@@ -42,6 +44,7 @@ export default function Dashboard() {
     });
     const [userStats, setUserStats] = useState([]); // Array of { name: 'User', count: 10 }
     const [chartData, setChartData] = useState(null);
+    const [monthlyChartData, setMonthlyChartData] = useState(null);
 
     useEffect(() => {
         async function fetchStats() {
@@ -50,27 +53,38 @@ export default function Dashboard() {
                 const q = query(chamadosRef);
                 const snapshot = await getDocs(q);
 
+                let total = 0;
                 let abertos = 0;
                 let fechados = 0;
                 let hoje = 0;
                 const types = {};
                 const userCounts = {}; // Map to store counts per user
+                const monthlyCounts = {}; // "yyyy-MM" -> count
 
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
 
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(today.getDate() - 30);
+                thirtyDaysAgo.setHours(0, 0, 0, 0);
+
                 snapshot.forEach(doc => {
                     const data = doc.data();
-
-                    if (data.status === 'Aberto' || data.status === 'Pendente') abertos++;
-                    if (data.status === 'Fechado') fechados++;
-
                     const dataAbertura = new Date(data.dataAbertura);
+
+                    if (dataAbertura >= thirtyDaysAgo) total++;
+                    if (data.status === 'Aberto' || data.status === 'Pendente') abertos++;
+                    if (data.status === 'Fechado' && dataAbertura >= thirtyDaysAgo) fechados++;
+
                     if (dataAbertura >= today) hoje++;
 
-                    // Stats for charts
+                    // Stats for charts - Types
                     const type = data.tipo || 'Outros';
                     types[type] = (types[type] || 0) + 1;
+
+                    // Stats for charts - Monthly Volume
+                    const monthKey = format(dataAbertura, 'yyyy-MM');
+                    monthlyCounts[monthKey] = (monthlyCounts[monthKey] || 0) + 1;
 
                     // Stats per User (Active tickets only: Aberto, Pendente, Revisão)
                     if (['Aberto', 'Pendente', 'Revisão'].includes(data.status)) {
@@ -87,12 +101,13 @@ export default function Dashboard() {
                 setUserStats(userStatsArray);
 
                 setStats({
-                    total: snapshot.size,
+                    total,
                     abertos,
                     fechados,
                     hoje
                 });
 
+                // Prepare Doughnut Chart Data
                 setChartData({
                     labels: Object.keys(types),
                     datasets: [
@@ -118,12 +133,35 @@ export default function Dashboard() {
                     ],
                 });
 
+                // Prepare Bar Chart Data (Monthly)
+                const sortedMonths = Object.keys(monthlyCounts).sort();
+                const monthLabels = sortedMonths.map(key => {
+                    const [year, month] = key.split('-');
+                    const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                    return format(date, 'MMM/yy', { locale: ptBR });
+                });
+                const monthValues = sortedMonths.map(key => monthlyCounts[key]);
+
+                setMonthlyChartData({
+                    labels: monthLabels,
+                    datasets: [
+                        {
+                            label: 'Quantidade de Chamados',
+                            data: monthValues,
+                            backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                            borderColor: 'rgb(59, 130, 246)',
+                            borderWidth: 1,
+                        },
+                    ],
+                });
+
             } catch (error) {
                 console.error("Erro ao buscar estatísticas:", error);
             } finally {
                 setLoading(false);
             }
         }
+
 
         fetchStats();
     }, []);
@@ -149,7 +187,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center justify-between">
                     <div>
-                        <p className="text-sm font-medium text-gray-500 mb-1">Total de Chamados</p>
+                        <p className="text-sm font-medium text-gray-500 mb-1">Total de Chamados (Últimos 30 dias)</p>
                         <h3 className="text-2xl font-bold text-gray-800">{stats.total}</h3>
                     </div>
                     <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
@@ -172,7 +210,7 @@ export default function Dashboard() {
 
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center justify-between">
                     <div>
-                        <p className="text-sm font-medium text-gray-500 mb-1">Finalizados</p>
+                        <p className="text-sm font-medium text-gray-500 mb-1">Finalizados (Últimos 30 dias)</p>
                         <h3 className="text-2xl font-bold text-gray-800">{stats.fechados}</h3>
                     </div>
                     <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
@@ -228,11 +266,15 @@ export default function Dashboard() {
                     </div>
                 </div>
 
+
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">Volume Semanal</h3>
-                    <div className="h-64 flex items-center justify-center text-gray-400">
-                        {/* Placeholder para gráfico de barras semanal */}
-                        <p>Gráfico de volume semanal (Em desenvolvimento)</p>
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">Volume Mensal</h3>
+                    <div className="h-64 flex items-center justify-center">
+                        {monthlyChartData ? (
+                            <Bar data={monthlyChartData} options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }} />
+                        ) : (
+                            <p className="text-gray-400">Carregando dados...</p>
+                        )}
                     </div>
                 </div>
             </div>

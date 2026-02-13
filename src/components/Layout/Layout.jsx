@@ -85,7 +85,7 @@ export default function Layout({ children }) {
     ];
 
     return (
-        <div className="min-h-screen bg-gray-50 flex">
+        <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
             {/* Sidebar Desktop */}
             <aside
                 className={`hidden md:flex print:hidden flex-col bg-white border-r border-gray-200 fixed h-full z-10 transition-all duration-300 ease-in-out ${isExpanded ? 'w-64' : 'w-20'
@@ -126,8 +126,8 @@ export default function Layout({ children }) {
                                 key={item.path}
                                 onClick={() => navigate(item.path)}
                                 className={`w-full flex items-center ${isExpanded ? 'gap-3 px-4' : 'justify-center px-2'} py-3 rounded-lg text-sm font-medium transition-colors ${isActive
-                                        ? 'bg-blue-50 text-blue-600'
-                                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                    ? 'bg-blue-50 text-blue-600'
+                                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                     }`}
                                 title={!isExpanded ? item.label : ''}
                             >
@@ -220,7 +220,7 @@ export default function Layout({ children }) {
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
-                        <nav className="flex-1 space-y-1">
+                        <nav className="flex-1 space-y-1 overflow-y-auto">
                             {menuItems.map((item) => (
                                 <button
                                     key={item.path}

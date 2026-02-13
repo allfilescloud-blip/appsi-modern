@@ -24,7 +24,7 @@ const Loading = () => <div className="flex items-center justify-center h-screen 
 function App() {
     return (
         <AuthProvider>
-            <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <Router basename="/appsi-modern" future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                 <Suspense fallback={<Loading />}>
                     <Routes>
                         <Route path="/login" element={<Login />} />
