@@ -263,8 +263,8 @@ const Flex = () => {
                     fps: 15, // Aumentado para maior fluidez
                     qrbox: (viewfinderWidth, viewfinderHeight) => {
                         // Dinâmico: ocupa 80% da largura, height proporcional
-                        const width = viewfinderWidth * 0.8;
-                        return { width, height: width * 0.6 };
+                        const width = Math.max(50, viewfinderWidth * 0.8);
+                        return { width, height: Math.max(50, width * 0.6) };
                     },
                     aspectRatio: 1.0,
                 },

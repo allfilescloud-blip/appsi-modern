@@ -216,8 +216,8 @@ export default function Verification() {
                     fps: 15, // Aumentado para maior fluidez
                     qrbox: (viewfinderWidth, viewfinderHeight) => {
                         // Dinâmico: ocupa 80% da largura, height proporcional
-                        const width = viewfinderWidth * 0.8;
-                        return { width, height: width * 0.5 }; // Um pouco menor que no Flex por ser apenas um campo
+                        const width = Math.max(50, viewfinderWidth * 0.8);
+                        return { width, height: Math.max(50, width * 0.5) }; // Um pouco menor que no Flex por ser apenas um campo
                     },
                     aspectRatio: 1.0,
                 },
