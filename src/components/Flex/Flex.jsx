@@ -14,7 +14,7 @@ import {
     where
 } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
-import QrScanner from 'qr-scanner';
+import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from '@zxing/library';
 import {
     FileText,
     PlusCircle,
@@ -66,17 +66,17 @@ const Flex = () => {
 
     // Scanner State
     const [isScannerActive, setIsScannerActive] = useState(false);
+    const [cameras, setCameras] = useState([]);
+    const [currentCameraId, setCurrentCameraId] = useState(null);
     const videoRef = useRef(null);
-    const qrScannerRef = useRef(null);
+    const zxingReaderRef = useRef(null);
+    const isProcessingRef = useRef(false);
 
     // Print State
     const [lastSavedReport, setLastSavedReport] = useState(null);
 
     // Auth
     const { userData, currentUser: user } = useAuth(); // Maps currentUser from context to user locally
-
-    // Load Reports
-    const isProcessingRef = useRef(false);
 
     useEffect(() => {
         if (!user) return;
@@ -110,17 +110,18 @@ const Flex = () => {
             setLoading(false);
         });
 
-        // Placeholder unsubscribe since getDocs isn't live
-        const unsubscribe = () => { };
-
         return () => {
-            unsubscribe();
-            if (qrScannerRef.current) {
-                qrScannerRef.current.destroy();
-                qrScannerRef.current = null;
+            if (zxingReaderRef.current) {
+                zxingReaderRef.current.reset();
+                zxingReaderRef.current = null;
             }
         };
     }, [user]);
+
+    const reportFormRef = useRef(reportForm);
+    useEffect(() => {
+        reportFormRef.current = reportForm;
+    }, [reportForm]);
 
     // Helpers
     const generateReportId = () => {
@@ -204,7 +205,7 @@ const Flex = () => {
             return;
         }
 
-        if (reportForm.items.some(item => item.sendId === processedId)) {
+        if (reportFormRef.current.items.some(item => item.sendId === processedId)) {
             toast.warning("Este ID já está na lista.");
             return;
         }
@@ -237,40 +238,86 @@ const Flex = () => {
 
     // Scanner Logic
     const startScanner = async () => {
-        if (isScannerActive || !videoRef.current) return;
+        if (isScannerActive) stopScanner();
+
+        // 1. Enable scanner UI first so videoRef.current is rendered
+        setIsScannerActive(true);
+
+        // 2. Wait for DOM update
+        await new Promise(r => setTimeout(r, 400));
+
+        if (!videoRef.current) {
+            console.error("Video element not found after activation");
+            setIsScannerActive(false);
+            return;
+        }
 
         try {
-            // Small delay to ensure DOM is ready
-            await new Promise(r => setTimeout(r, 100));
+            const hints = new Map();
+            const formats = [
+                BarcodeFormat.QR_CODE,
+                BarcodeFormat.EAN_13,
+                BarcodeFormat.EAN_8,
+                BarcodeFormat.CODE_128,
+                BarcodeFormat.CODE_39,
+                BarcodeFormat.UPC_A,
+                BarcodeFormat.UPC_E,
+                BarcodeFormat.ITF,
+                BarcodeFormat.DATA_MATRIX
+            ];
+            hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
+            hints.set(DecodeHintType.TRY_HARDER, true);
 
-            const qrScanner = new QrScanner(
+            const zxingReader = new BrowserMultiFormatReader(hints);
+            zxingReaderRef.current = zxingReader;
+
+            const videoDevices = await zxingReader.listVideoInputDevices();
+            setCameras(videoDevices);
+
+            // Use the preferred camera if set, otherwise try to find a back camera
+            let selectedCameraId = currentCameraId;
+            if (!selectedCameraId && videoDevices.length > 0) {
+                const backCamera = videoDevices.find(device =>
+                    device.label.toLowerCase().includes('back') ||
+                    device.label.toLowerCase().includes('traseira') ||
+                    device.label.toLowerCase().includes('rear')
+                );
+                selectedCameraId = backCamera ? backCamera.deviceId : videoDevices[0].deviceId;
+                setCurrentCameraId(selectedCameraId);
+            }
+
+            if (!selectedCameraId) throw new Error("Câmera não encontrada");
+
+            setIsScannerActive(true);
+
+            // Removed redundant delay
+
+            // CRITICAL: Double check if user hasn't stopped the scanner during delay
+            if (!zxingReaderRef.current) {
+                console.log("Scanner parado durante a inicialização.");
+                return;
+            }
+
+            await zxingReader.decodeFromVideoDevice(
+                selectedCameraId,
                 videoRef.current,
-                result => {
-                    if (isProcessingRef.current) return;
-                    isProcessingRef.current = true;
+                (result, err) => {
+                    if (result) {
+                        if (isProcessingRef.current) return;
+                        isProcessingRef.current = true;
 
-                    playSound('success');
-                    addItem(result.data);
-                    toast.success("Código lido!");
+                        playSound('success');
+                        addItem(result.getText());
+                        toast.success("Código lido!");
 
-                    setTimeout(() => { isProcessingRef.current = false; }, 1000);
-                },
-                {
-                    onDecodeError: error => {
-                        // Silently ignore decode errors as they are frequent during scanning
-                    },
-                    highlightScanRegion: true,
-                    highlightCodeOutline: true,
-                    returnDetailedScanResult: true
+                        setTimeout(() => { isProcessingRef.current = false; }, 1500);
+                    }
                 }
             );
 
-            qrScannerRef.current = qrScanner;
-            await qrScanner.start();
-            setIsScannerActive(true);
         } catch (err) {
-            console.error("Erro ao iniciar scanner:", err);
-            toast.error("Não foi possível acessar a câmera. Verifique as permissões.");
+            console.error("Erro ao iniciar scanner ZXing:", err);
+            toast.error("Não foi possível acessar a câmera.");
             setIsScannerActive(false);
         }
     };
@@ -300,14 +347,42 @@ const Flex = () => {
         }
     };
 
+    const toggleCamera = async () => {
+        if (!zxingReaderRef.current || cameras.length < 2) return;
+
+        const currentIndex = cameras.findIndex(c => c.deviceId === currentCameraId);
+        const nextIndex = (currentIndex + 1) % cameras.length;
+        const nextCameraId = cameras[nextIndex].deviceId;
+
+        try {
+            stopScanner();
+            setCurrentCameraId(nextCameraId);
+            // Re-start with next camera
+            setTimeout(() => startScanner(), 100);
+            toast.info(`Câmera alterada para: ${cameras[nextIndex].label || 'Próxima'}`);
+        } catch (err) {
+            console.error("Erro ao trocar câmera:", err);
+            toast.error("Erro ao trocar de câmera.");
+        }
+    };
+
     const stopScanner = () => {
-        if (qrScannerRef.current) {
-            qrScannerRef.current.stop();
-            qrScannerRef.current.destroy();
-            qrScannerRef.current = null;
+        if (zxingReaderRef.current) {
+            zxingReaderRef.current.reset();
+            zxingReaderRef.current = null;
         }
         setIsScannerActive(false);
     };
+
+    // Auto-stop on unmount
+    useEffect(() => {
+        return () => {
+            if (zxingReaderRef.current) {
+                zxingReaderRef.current.reset();
+                zxingReaderRef.current = null;
+            }
+        };
+    }, []);
 
     const toggleScanner = () => {
         if (isScannerActive) {
@@ -350,6 +425,7 @@ const Flex = () => {
                 setReports(prev => prev.map(r => r.firebaseId === currentReportId ? { ...dataToSave, firebaseId: currentReportId } : r));
 
                 toast.success("Relatório atualizado!");
+                stopScanner(); // Auto-stop scanner on update
                 closeReportModal();
             } else {
                 dataToSave.id = reportForm.displayId;
@@ -363,6 +439,7 @@ const Flex = () => {
                 toast.success("Relatório criado!");
 
                 setLastSavedReport(newReport);
+                stopScanner(); // Auto-stop scanner on create
                 closeReportModal();
                 setIsPrintConfirmOpen(true);
             }
@@ -700,6 +777,16 @@ const Flex = () => {
                                         >
                                             {isScannerActive ? <StopCircle size={20} /> : <ScanBarcode size={20} />}
                                         </button>
+
+                                        {isScannerActive && cameras.length > 1 && (
+                                            <button
+                                                className="p-3 rounded-lg border bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100 transition-colors"
+                                                onClick={toggleCamera}
+                                                title="Alternar Câmera"
+                                            >
+                                                <RefreshCw size={20} />
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
 
@@ -720,7 +807,13 @@ const Flex = () => {
                                 className="mb-4 overflow-hidden rounded-xl bg-black relative"
                                 style={{ display: isScannerActive ? 'block' : 'none', minHeight: '300px' }}
                             >
-                                <video ref={videoRef} className="w-full h-full object-cover"></video>
+                                <video
+                                    ref={videoRef}
+                                    className="w-full h-full object-cover"
+                                    playsInline
+                                    muted
+                                    autoPlay
+                                ></video>
                                 <p className="text-center text-white py-2 text-sm bg-black font-semibold absolute bottom-0 left-0 w-full opacity-70">
                                     Escaneando...
                                 </p>

@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { getOrder } from '../../services/ideris';
 import { toast } from 'react-toastify';
-import { Search, CheckCircle, XCircle, Package, Camera, Printer, Trash2, Globe, WifiOff, ScanBarcode, StopCircle } from 'lucide-react';
-import QrScanner from 'qr-scanner';
+import { Search, CheckCircle, XCircle, Package, Camera, Printer, Trash2, Globe, WifiOff, ScanBarcode, StopCircle, RefreshCw } from 'lucide-react';
+import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from '@zxing/library';
 
 export default function Verification() {
     const [inputCode, setInputCode] = useState('');
@@ -16,9 +16,17 @@ export default function Verification() {
 
     // Scanner State
     const [isScannerActive, setIsScannerActive] = useState(false);
+    const [cameras, setCameras] = useState([]);
+    const [currentCameraId, setCurrentCameraId] = useState(null);
     const videoRef = useRef(null);
-    const qrScannerRef = useRef(null);
+    const zxingReaderRef = useRef(null);
     const inputRef = useRef(null);
+    const isProcessingRef = useRef(false);
+
+    const verifiedListRef = useRef(verifiedList);
+    useEffect(() => {
+        verifiedListRef.current = verifiedList;
+    }, [verifiedList]);
 
     useEffect(() => {
         // Focus input unless scanner is active (to avoid keyboard popping up on mobile while scanning)
@@ -35,9 +43,9 @@ export default function Verification() {
     // cleanup on unmount
     useEffect(() => {
         return () => {
-            if (qrScannerRef.current) {
-                qrScannerRef.current.destroy();
-                qrScannerRef.current = null;
+            if (zxingReaderRef.current) {
+                zxingReaderRef.current.reset();
+                zxingReaderRef.current = null;
             }
         }
     }, [])
@@ -75,7 +83,7 @@ export default function Verification() {
         if (!code) return 'empty'; // Return status
 
         // 1. Check for Duplicates (Local Check)
-        const isDuplicate = verifiedList.some(item => item.code === code);
+        const isDuplicate = verifiedListRef.current.some(item => item.code === code);
         if (isDuplicate) {
             const result = {
                 code,
@@ -180,60 +188,131 @@ export default function Verification() {
         }
     };
 
-    // Scanner Logic
-    const isProcessingRef = useRef(false);
-
     const startScanner = async () => {
-        if (isScannerActive || !videoRef.current) return;
+        if (isScannerActive) stopScanner();
+
+        // 1. Enable scanner UI first
+        setIsScannerActive(true);
+
+        // 2. Wait for DOM update
+        await new Promise(r => setTimeout(r, 400));
+
+        if (!videoRef.current) {
+            console.error("Video element not found");
+            setIsScannerActive(false);
+            return;
+        }
 
         try {
-            // Small delay to ensure DOM is ready
-            await new Promise(r => setTimeout(r, 100));
+            const hints = new Map();
+            const formats = [
+                BarcodeFormat.QR_CODE,
+                BarcodeFormat.EAN_13,
+                BarcodeFormat.EAN_8,
+                BarcodeFormat.CODE_128,
+                BarcodeFormat.CODE_39,
+                BarcodeFormat.UPC_A,
+                BarcodeFormat.UPC_E,
+                BarcodeFormat.ITF,
+                BarcodeFormat.DATA_MATRIX
+            ];
+            hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
+            hints.set(DecodeHintType.TRY_HARDER, true);
 
-            const qrScanner = new QrScanner(
+            const zxingReader = new BrowserMultiFormatReader(hints);
+            zxingReaderRef.current = zxingReader;
+
+            const videoDevices = await zxingReader.listVideoInputDevices();
+            setCameras(videoDevices);
+
+            // Prioritize back camera
+            let selectedCameraId = currentCameraId;
+            if (!selectedCameraId && videoDevices.length > 0) {
+                const backCamera = videoDevices.find(device =>
+                    device.label.toLowerCase().includes('back') ||
+                    device.label.toLowerCase().includes('traseira') ||
+                    device.label.toLowerCase().includes('rear')
+                );
+                selectedCameraId = backCamera ? backCamera.deviceId : videoDevices[0].deviceId;
+                setCurrentCameraId(selectedCameraId);
+            }
+
+            if (!selectedCameraId) throw new Error("Câmera não encontrada");
+
+            setIsScannerActive(true);
+
+            // Removed redundant delay
+
+            // CRITICAL: Double check if user hasn't stopped the scanner during delay
+            if (!zxingReaderRef.current) {
+                console.log("Scanner parado durante a inicialização.");
+                return;
+            }
+
+            await zxingReader.decodeFromVideoDevice(
+                selectedCameraId,
                 videoRef.current,
-                async result => {
-                    if (isProcessingRef.current) return;
-                    isProcessingRef.current = true;
+                async (result, err) => {
+                    if (result) {
+                        if (isProcessingRef.current) return;
+                        isProcessingRef.current = true;
 
-                    playSound('success');
+                        playSound('success');
 
-                    try {
-                        await handleSearch(null, result.data);
-                    } finally {
-                        setTimeout(() => { isProcessingRef.current = false; }, 1000);
+                        try {
+                            await handleSearch(null, result.getText());
+                            stopScanner(); // Auto-stop on success
+                        } finally {
+                            setTimeout(() => { isProcessingRef.current = false; }, 1500);
+                        }
                     }
-                },
-                {
-                    onDecodeError: error => {
-                        // Silently ignore
-                    },
-                    highlightScanRegion: true,
-                    highlightCodeOutline: true,
-                    returnDetailedScanResult: true
                 }
             );
 
-            qrScannerRef.current = qrScanner;
-            await qrScanner.start();
-            setIsScannerActive(true);
         } catch (err) {
-            console.error("Erro ao iniciar scanner:", err);
-            toast.error("Não foi possível acessar a câmera. Verifique as permissões.");
+            console.error("Erro ao iniciar scanner ZXing:", err);
+            toast.error("Não foi possível acessar a câmera.");
             setIsScannerActive(false);
         }
     };
 
     // handleImageUpload removido (conforme solicitado)
 
+    const toggleCamera = async () => {
+        if (!zxingReaderRef.current || cameras.length < 2) return;
+
+        const currentIndex = cameras.findIndex(c => c.deviceId === currentCameraId);
+        const nextIndex = (currentIndex + 1) % cameras.length;
+        const nextCameraId = cameras[nextIndex].deviceId;
+
+        try {
+            stopScanner();
+            setCurrentCameraId(nextCameraId);
+            setTimeout(() => startScanner(), 100);
+            toast.info(`Câmera alterada para: ${cameras[nextIndex].label || 'Próxima'}`);
+        } catch (err) {
+            console.error("Erro ao trocar câmera:", err);
+            toast.error("Erro ao trocar de câmera.");
+        }
+    };
+
     const stopScanner = () => {
-        if (qrScannerRef.current) {
-            qrScannerRef.current.stop();
-            qrScannerRef.current.destroy();
-            qrScannerRef.current = null;
+        if (zxingReaderRef.current) {
+            zxingReaderRef.current.reset();
+            zxingReaderRef.current = null;
         }
         setIsScannerActive(false);
     };
+
+    // Auto-stop on unmount
+    useEffect(() => {
+        return () => {
+            if (zxingReaderRef.current) {
+                zxingReaderRef.current.reset();
+                zxingReaderRef.current = null;
+            }
+        };
+    }, []);
 
     const toggleScanner = () => {
         if (isScannerActive) {
@@ -316,23 +395,40 @@ export default function Verification() {
                                 {loading ? <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" /> : 'Verificar'}
                             </button>
 
-                            <div className="md:hidden">
+                            <button
+                                type="button"
+                                onClick={toggleScanner}
+                                className={`p-3 rounded-lg border transition-colors ${isScannerActive
+                                    ? 'bg-red-50 border-red-200 text-red-600 animate-pulse'
+                                    : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                                title={isScannerActive ? 'Parar Scanner' : 'Abrir Câmera'}
+                            >
+                                {isScannerActive ? <StopCircle size={20} /> : <ScanBarcode size={20} />}
+                            </button>
+
+                            {isScannerActive && cameras.length > 1 && (
                                 <button
                                     type="button"
-                                    onClick={toggleScanner}
-                                    className={`p-2 rounded-lg shadow-sm transition-all ${isScannerActive ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-800 text-white'}`}
-                                    title={isScannerActive ? "Parar Scanner" : "Abrir Scanner"}
+                                    onClick={toggleCamera}
+                                    className="p-3 rounded-lg border bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100 transition-colors"
+                                    title="Alternar Câmera"
                                 >
-                                    {isScannerActive ? <StopCircle className="w-5 h-5" /> : <ScanBarcode className="w-5 h-5" />}
+                                    <RefreshCw size={20} />
                                 </button>
-                            </div>
+                            )}
                         </div>
                     </form>
 
                     {/* Scanner View */}
                     {isScannerActive && (
                         <div className="mt-4 overflow-hidden rounded-xl bg-black relative" style={{ minHeight: '300px' }}>
-                            <video ref={videoRef} className="w-full h-full object-cover"></video>
+                            <video
+                                ref={videoRef}
+                                className="w-full h-full object-cover"
+                                playsInline
+                                muted
+                                autoPlay
+                            ></video>
                             <p className="text-center text-white py-2 text-sm bg-black font-semibold absolute bottom-0 left-0 w-full opacity-70">
                                 Escaneando...
                             </p>
