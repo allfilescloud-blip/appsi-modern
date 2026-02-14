@@ -41,5 +41,5 @@ export default defineConfig({
             }
         })
     ],
-    base: '/appsi-modern/',
+    base: './',
 })

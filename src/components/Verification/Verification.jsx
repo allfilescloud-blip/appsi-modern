@@ -18,7 +18,7 @@ export default function Verification() {
     const [isScannerActive, setIsScannerActive] = useState(false);
     const [cameras, setCameras] = useState([]);
     const [currentCameraId, setCurrentCameraId] = useState(null);
-
+    const videoRef = useRef(null);
     const scannerRef = useRef(null);
     const inputRef = useRef(null);
     const isProcessingRef = useRef(false);
@@ -40,11 +40,10 @@ export default function Verification() {
         // REMOVED verifiedList and lastResult from dependencies
     }, [isScannerActive]);
 
-    // cleanup on unmount
     useEffect(() => {
         return () => {
             if (scannerRef.current) {
-                scannerRef.current.stop().catch(err => console.error("Cleanup error:", err));
+                scannerRef.current.stop().catch(err => console.error("Error stopping scanner:", err));
                 scannerRef.current = null;
             }
         }
@@ -191,13 +190,12 @@ export default function Verification() {
     const startScanner = async () => {
         if (isScannerActive) stopScanner();
 
-        // 1. Enable scanner UI first
         setIsScannerActive(true);
 
-        // 2. Wait for DOM update
-        await new Promise(r => setTimeout(r, 450));
+        // Wait for DOM update
+        await new Promise(r => setTimeout(r, 400));
 
-        const readerElement = document.getElementById("reader-v");
+        const readerElement = document.getElementById('reader-verification');
         if (!readerElement) {
             console.error("Reader element not found");
             setIsScannerActive(false);
@@ -205,55 +203,38 @@ export default function Verification() {
         }
 
         try {
-            const html5QrCode = new Html5Qrcode("reader-v");
-            scannerRef.current = html5QrCode;
-
             const devices = await Html5Qrcode.getCameras();
             setCameras(devices);
 
-            let selectedCameraId = currentCameraId;
-            if (!selectedCameraId && devices.length > 0) {
-                const backCamera = devices.find(device =>
-                    device.label.toLowerCase().includes('back') ||
-                    device.label.toLowerCase().includes('traseira') ||
-                    device.label.toLowerCase().includes('rear')
-                );
-                selectedCameraId = backCamera ? backCamera.id : devices[0].id;
-                setCurrentCameraId(selectedCameraId);
-            }
-
-            if (!selectedCameraId && devices.length === 0) {
-                selectedCameraId = { facingMode: "environment" };
-            }
+            const html5QrCode = new Html5Qrcode("reader-verification");
+            scannerRef.current = html5QrCode;
 
             const config = {
                 fps: 20,
                 qrbox: { width: 300, height: 150 },
-                aspectRatio: 1.0,
-                experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true
-                }
+                aspectRatio: 1.0
             };
 
+            const targetCamera = currentCameraId || { facingMode: "environment" };
+
             await html5QrCode.start(
-                selectedCameraId || { facingMode: "environment" },
+                targetCamera,
                 config,
                 async (decodedText) => {
                     if (isProcessingRef.current) return;
                     isProcessingRef.current = true;
 
                     playSound('success');
-
                     try {
-                        await handleSearch(null, decodedText);
-                        stopScanner();
+                        const status = await handleSearch(null, decodedText);
+                        if (status === 'success' || status === 'duplicate') {
+                            stopScanner();
+                        }
                     } finally {
                         setTimeout(() => { isProcessingRef.current = false; }, 1500);
                     }
                 },
-                (errorMessage) => {
-                    // skip error
-                }
+                (errorMessage) => { }
             );
 
         } catch (err) {
@@ -265,23 +246,43 @@ export default function Verification() {
 
     // handleImageUpload removido (conforme solicitado)
 
-    const stopScanner = async () => {
-        if (scannerRef.current) {
-            try {
-                await scannerRef.current.stop();
-                scannerRef.current = null;
-            } catch (err) {
-                console.error("Erro ao parar scanner:", err);
-            }
+    const toggleCamera = async () => {
+        if (!scannerRef.current || cameras.length < 2) return;
+
+        const currentIndex = cameras.findIndex(c => c.id === currentCameraId);
+        const nextIndex = (currentIndex + 1) % cameras.length;
+        const nextCameraId = cameras[nextIndex].id;
+
+        try {
+            stopScanner();
+            setCurrentCameraId(nextCameraId);
+            setTimeout(() => startScanner(), 100);
+            toast.info(`Câmera alterada para: ${cameras[nextIndex].label || 'Próxima'}`);
+        } catch (err) {
+            console.error("Erro ao trocar câmera:", err);
+            toast.error("Erro ao trocar de câmera.");
         }
-        setIsScannerActive(false);
+    };
+
+    const stopScanner = () => {
+        if (scannerRef.current) {
+            scannerRef.current.stop().then(() => {
+                scannerRef.current = null;
+                setIsScannerActive(false);
+            }).catch(err => {
+                console.error("Erro ao parar scanner:", err);
+                setIsScannerActive(false);
+            });
+        } else {
+            setIsScannerActive(false);
+        }
     };
 
     // Auto-stop on unmount
     useEffect(() => {
         return () => {
             if (scannerRef.current) {
-                scannerRef.current.stop().catch(err => console.error("Unmount cleanup error:", err));
+                scannerRef.current.stop().catch(err => console.error(err));
                 scannerRef.current = null;
             }
         };
@@ -394,20 +395,9 @@ export default function Verification() {
 
                     {/* Scanner View */}
                     {isScannerActive && (
-                        <div id="reader-v" className="mt-4 overflow-hidden rounded-xl bg-black relative" style={{ minHeight: '300px' }}>
-                            {/* Visual Overlay */}
-                            <div className="scanner-overlay-container">
-                                <div className="scanner-box">
-                                    <div className="scanner-corner-tl"></div>
-                                    <div className="scanner-corner-tr"></div>
-                                    <div className="scanner-corner-bl"></div>
-                                    <div className="scanner-corner-br"></div>
-                                    <div className="scanning-line"></div>
-                                    <p className="scanner-hint">Aponte para o código</p>
-                                </div>
-                            </div>
-
-                            <p className="text-center text-white py-2 text-sm bg-black font-semibold absolute bottom-0 left-0 w-full opacity-70 z-10">
+                        <div className="mt-4 overflow-hidden rounded-xl bg-black relative" style={{ minHeight: '300px' }}>
+                            <div id="reader-verification" className="w-full h-full"></div>
+                            <p className="text-center text-white py-2 text-sm bg-black font-semibold absolute bottom-0 left-0 w-full opacity-70 border-t border-white/20">
                                 Escaneando...
                             </p>
                         </div>
