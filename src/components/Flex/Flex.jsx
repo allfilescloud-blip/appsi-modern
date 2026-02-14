@@ -14,7 +14,7 @@ import {
     where
 } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import QrScanner from 'qr-scanner';
 import {
     FileText,
     PlusCircle,
@@ -66,8 +66,8 @@ const Flex = () => {
 
     // Scanner State
     const [isScannerActive, setIsScannerActive] = useState(false);
-    const scannerRef = useRef(null);
-    const html5QrCodeRef = useRef(null);
+    const videoRef = useRef(null);
+    const qrScannerRef = useRef(null);
 
     // Print State
     const [lastSavedReport, setLastSavedReport] = useState(null);
@@ -115,7 +115,10 @@ const Flex = () => {
 
         return () => {
             unsubscribe();
-            stopScanner(); // Cleanup scanner on unmount
+            if (qrScannerRef.current) {
+                qrScannerRef.current.destroy();
+                qrScannerRef.current = null;
+            }
         };
     }, [user]);
 
@@ -234,73 +237,40 @@ const Flex = () => {
 
     // Scanner Logic
     const startScanner = async () => {
-        if (isScannerActive) return;
+        if (isScannerActive || !videoRef.current) return;
 
         try {
-            // Ensure unique ID for this component instance
-            const elementId = "flex-reader";
-
-            // Cleanup existing instance if any
-            if (html5QrCodeRef.current) {
-                try {
-                    await html5QrCodeRef.current.stop();
-                    await html5QrCodeRef.current.clear();
-                } catch (e) {
-                    console.warn("Scanner Cleanup Error:", e);
-                }
-                html5QrCodeRef.current = null;
-            }
-
-            // Small delay to ensure DOM is ready and state updated
+            // Small delay to ensure DOM is ready
             await new Promise(r => setTimeout(r, 100));
 
-            const html5QrCode = new Html5Qrcode(elementId);
-            html5QrCodeRef.current = html5QrCode;
+            const qrScanner = new QrScanner(
+                videoRef.current,
+                result => {
+                    if (isProcessingRef.current) return;
+                    isProcessingRef.current = true;
 
-            const config = {
-                fps: 20, // Aumentado para maior fluidez
-                qrbox: null, // Câmera total (ocupa todo o visor disponível)
-                aspectRatio: 1.0,
-            };
+                    playSound('success');
+                    addItem(result.data);
+                    toast.success("Código lido!");
 
-            const successCallback = (decodedText) => {
-                if (isProcessingRef.current) return;
-                isProcessingRef.current = true;
-
-                // Feedback Sonoro (Bip)
-                playSound('success');
-
-                addItem(decodedText);
-                toast.success("Código lido!");
-
-                // Debounce de 1 segundo para permitir leitura contínua rápida
-                setTimeout(() => { isProcessingRef.current = false; }, 1000);
-            };
-
-            try {
-                // Tentativa 1: Câmera traseira nativa
-                await html5QrCode.start({ facingMode: "environment" }, config, successCallback);
-                setIsScannerActive(true);
-            } catch (firstErr) {
-                console.warn("Falha ao iniciar com facingMode no Flex, tentando fallback...", firstErr);
-                try {
-                    const devices = await Html5Qrcode.getCameras();
-                    if (devices && devices.length > 0) {
-                        const cameraId = devices[devices.length - 1].id;
-                        await html5QrCode.start(cameraId, config, successCallback);
-                        setIsScannerActive(true);
-                    } else {
-                        throw new Error("Nenhuma câmera encontrada.");
-                    }
-                } catch (secondErr) {
-                    console.error("Erro total no scanner do Flex:", secondErr);
-                    toast.error("Não foi possível acessar a câmera.");
-                    setIsScannerActive(false);
+                    setTimeout(() => { isProcessingRef.current = false; }, 1000);
+                },
+                {
+                    onDecodeError: error => {
+                        // Silently ignore decode errors as they are frequent during scanning
+                    },
+                    highlightScanRegion: true,
+                    highlightCodeOutline: true,
+                    returnDetailedScanResult: true
                 }
-            }
+            );
+
+            qrScannerRef.current = qrScanner;
+            await qrScanner.start();
+            setIsScannerActive(true);
         } catch (err) {
-            console.error("Erro crítico no scanner do Flex:", err);
-            toast.error("Erro de configuração do scanner.");
+            console.error("Erro ao iniciar scanner:", err);
+            toast.error("Não foi possível acessar a câmera. Verifique as permissões.");
             setIsScannerActive(false);
         }
     };
@@ -330,22 +300,13 @@ const Flex = () => {
         }
     };
 
-    const stopScanner = async () => {
-        if (html5QrCodeRef.current) {
-            try {
-                if (isScannerActive) {
-                    await html5QrCodeRef.current.stop();
-                }
-                await html5QrCodeRef.current.clear();
-            } catch (err) {
-                console.error("Erro ao parar scanner:", err);
-            } finally {
-                html5QrCodeRef.current = null;
-                setIsScannerActive(false);
-            }
-        } else {
-            setIsScannerActive(false);
+    const stopScanner = () => {
+        if (qrScannerRef.current) {
+            qrScannerRef.current.stop();
+            qrScannerRef.current.destroy();
+            qrScannerRef.current = null;
         }
+        setIsScannerActive(false);
     };
 
     const toggleScanner = () => {
@@ -757,11 +718,11 @@ const Flex = () => {
                             {/* Scanner View */}
                             <div
                                 className="mb-4 overflow-hidden rounded-xl bg-black relative"
-                                style={{ display: isScannerActive ? 'block' : 'none' }}
+                                style={{ display: isScannerActive ? 'block' : 'none', minHeight: '300px' }}
                             >
-                                <div id="flex-reader" className="w-full"></div>
-                                <p className="text-center text-white py-2 text-sm bg-black font-semibold">
-                                    Câmera frontal/traseira (Total)
+                                <video ref={videoRef} className="w-full h-full object-cover"></video>
+                                <p className="text-center text-white py-2 text-sm bg-black font-semibold absolute bottom-0 left-0 w-full opacity-70">
+                                    Escaneando...
                                 </p>
                             </div>
 

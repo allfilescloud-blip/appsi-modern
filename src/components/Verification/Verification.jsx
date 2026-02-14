@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { getOrder } from '../../services/ideris';
 import { toast } from 'react-toastify';
 import { Search, CheckCircle, XCircle, Package, Camera, Printer, Trash2, Globe, WifiOff, ScanBarcode, StopCircle } from 'lucide-react';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import QrScanner from 'qr-scanner';
 
 export default function Verification() {
     const [inputCode, setInputCode] = useState('');
@@ -16,7 +16,8 @@ export default function Verification() {
 
     // Scanner State
     const [isScannerActive, setIsScannerActive] = useState(false);
-    const html5QrCodeRef = useRef(null);
+    const videoRef = useRef(null);
+    const qrScannerRef = useRef(null);
     const inputRef = useRef(null);
 
     useEffect(() => {
@@ -26,13 +27,7 @@ export default function Verification() {
         }
 
         return () => {
-            // Only stop if component unmounts. 
-            // The isScannerActive change is handled by startScanner/stopScanner functions logic or separate effect if needed.
-            // But actually, if isScannerActive changes to false, we want to stop.
-            if (html5QrCodeRef.current && isScannerActive) {
-                // html5QrCodeRef.current.stop().catch(console.error); 
-                // We don't want to stop here on re-renders.
-            }
+            // No action needed here as we have separate cleanup
         };
         // REMOVED verifiedList and lastResult from dependencies
     }, [isScannerActive]);
@@ -40,8 +35,9 @@ export default function Verification() {
     // cleanup on unmount
     useEffect(() => {
         return () => {
-            if (html5QrCodeRef.current) {
-                html5QrCodeRef.current.stop().catch(err => console.warn("Scanner cleanup", err));
+            if (qrScannerRef.current) {
+                qrScannerRef.current.destroy();
+                qrScannerRef.current = null;
             }
         }
     }, [])
@@ -188,96 +184,55 @@ export default function Verification() {
     const isProcessingRef = useRef(false);
 
     const startScanner = async () => {
-        if (isScannerActive) return;
+        if (isScannerActive || !videoRef.current) return;
 
         try {
-            const elementId = "verification-reader";
-
-            if (html5QrCodeRef.current) {
-                try {
-                    await html5QrCodeRef.current.stop();
-                    await html5QrCodeRef.current.clear();
-                } catch (e) {
-                    console.warn("Scanner Cleanup Error:", e);
-                }
-                html5QrCodeRef.current = null;
-            }
-
             // Small delay to ensure DOM is ready
             await new Promise(r => setTimeout(r, 100));
 
-            const html5QrCode = new Html5Qrcode(elementId);
-            html5QrCodeRef.current = html5QrCode;
+            const qrScanner = new QrScanner(
+                videoRef.current,
+                async result => {
+                    if (isProcessingRef.current) return;
+                    isProcessingRef.current = true;
 
-            const config = {
-                fps: 20,
-                qrbox: null, // Câmera total
-                aspectRatio: 1.0,
-            };
+                    playSound('success');
 
-            const successCallback = async (decodedText) => {
-                if (isProcessingRef.current) return;
-                isProcessingRef.current = true;
-
-                // Beep imediato
-                playSound('success');
-
-                try {
-                    const result = await handleSearch(null, decodedText);
-                    // No Verification, se for cancelado ou erro, talvez queira mostrar vermelho, 
-                    // mas o handleSearch já cuida de tudo (toast, som de erro se necessário, lista).
-                } finally {
-                    // Debounce para permitir leitura contínua
-                    setTimeout(() => { isProcessingRef.current = false; }, 1000);
-                }
-            };
-
-            try {
-                // Tentativa 1: Traseira
-                await html5QrCode.start({ facingMode: "environment" }, config, successCallback);
-                setIsScannerActive(true);
-            } catch (firstErr) {
-                console.warn("Falha ao iniciar com facingMode no Verification, tentando fallback...", firstErr);
-                try {
-                    const devices = await Html5Qrcode.getCameras();
-                    if (devices && devices.length > 0) {
-                        const cameraId = devices[devices.length - 1].id;
-                        await html5QrCode.start(cameraId, config, successCallback);
-                        setIsScannerActive(true);
-                    } else {
-                        throw new Error("Nenhuma câmera encontrada.");
+                    try {
+                        await handleSearch(null, result.data);
+                    } finally {
+                        setTimeout(() => { isProcessingRef.current = false; }, 1000);
                     }
-                } catch (secondErr) {
-                    console.error("Erro total no scanner do Verification:", secondErr);
-                    toast.error("Não foi possível acessar a câmera.");
-                    setIsScannerActive(false);
+                },
+                {
+                    onDecodeError: error => {
+                        // Silently ignore
+                    },
+                    highlightScanRegion: true,
+                    highlightCodeOutline: true,
+                    returnDetailedScanResult: true
                 }
-            }
+            );
+
+            qrScannerRef.current = qrScanner;
+            await qrScanner.start();
+            setIsScannerActive(true);
         } catch (err) {
-            console.error("Erro crítico no scanner do Verification:", err);
-            toast.error("Erro ao configurar scanner.");
+            console.error("Erro ao iniciar scanner:", err);
+            toast.error("Não foi possível acessar a câmera. Verifique as permissões.");
             setIsScannerActive(false);
         }
     };
 
     // handleImageUpload removido (conforme solicitado)
 
-    const stopScanner = async () => {
-        if (html5QrCodeRef.current) {
-            try {
-                if (isScannerActive) {
-                    await html5QrCodeRef.current.stop();
-                }
-                await html5QrCodeRef.current.clear();
-            } catch (err) {
-                console.error("Erro ao parar scanner:", err);
-            } finally {
-                html5QrCodeRef.current = null;
-                setIsScannerActive(false);
-            }
-        } else {
-            setIsScannerActive(false);
+    const stopScanner = () => {
+        if (qrScannerRef.current) {
+            qrScannerRef.current.stop();
+            qrScannerRef.current.destroy();
+            qrScannerRef.current = null;
         }
+        setIsScannerActive(false);
     };
 
     const toggleScanner = () => {
@@ -376,14 +331,10 @@ export default function Verification() {
 
                     {/* Scanner View */}
                     {isScannerActive && (
-                        <div className="mt-4 overflow-hidden rounded-xl bg-black relative">
-                            <div
-                                id="verification-reader"
-                                className="w-full"
-                                style={{ width: '100%', minHeight: '300px' }}
-                            ></div>
-                            <p className="text-center text-white py-2 text-sm bg-black font-semibold">
-                                Câmera frontal/traseira (Total)
+                        <div className="mt-4 overflow-hidden rounded-xl bg-black relative" style={{ minHeight: '300px' }}>
+                            <video ref={videoRef} className="w-full h-full object-cover"></video>
+                            <p className="text-center text-white py-2 text-sm bg-black font-semibold absolute bottom-0 left-0 w-full opacity-70">
+                                Escaneando...
                             </p>
                         </div>
                     )}
