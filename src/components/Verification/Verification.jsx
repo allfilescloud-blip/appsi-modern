@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { getOrder } from '../../services/ideris';
 import { toast } from 'react-toastify';
 import { Search, CheckCircle, XCircle, Package, Camera, Printer, Trash2, Globe, WifiOff, ScanBarcode, StopCircle, RefreshCw } from 'lucide-react';
-import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from '@zxing/library';
+import { Html5Qrcode } from 'html5-qrcode';
 
 export default function Verification() {
     const [inputCode, setInputCode] = useState('');
@@ -18,8 +18,8 @@ export default function Verification() {
     const [isScannerActive, setIsScannerActive] = useState(false);
     const [cameras, setCameras] = useState([]);
     const [currentCameraId, setCurrentCameraId] = useState(null);
-    const videoRef = useRef(null);
-    const zxingReaderRef = useRef(null);
+
+    const scannerRef = useRef(null);
     const inputRef = useRef(null);
     const isProcessingRef = useRef(false);
 
@@ -43,9 +43,9 @@ export default function Verification() {
     // cleanup on unmount
     useEffect(() => {
         return () => {
-            if (zxingReaderRef.current) {
-                zxingReaderRef.current.reset();
-                zxingReaderRef.current = null;
+            if (scannerRef.current) {
+                scannerRef.current.stop().catch(err => console.error("Cleanup error:", err));
+                scannerRef.current = null;
             }
         }
     }, [])
@@ -195,82 +195,70 @@ export default function Verification() {
         setIsScannerActive(true);
 
         // 2. Wait for DOM update
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 450));
 
-        if (!videoRef.current) {
-            console.error("Video element not found");
+        const readerElement = document.getElementById("reader-v");
+        if (!readerElement) {
+            console.error("Reader element not found");
             setIsScannerActive(false);
             return;
         }
 
         try {
-            const hints = new Map();
-            const formats = [
-                BarcodeFormat.QR_CODE,
-                BarcodeFormat.EAN_13,
-                BarcodeFormat.EAN_8,
-                BarcodeFormat.CODE_128,
-                BarcodeFormat.CODE_39,
-                BarcodeFormat.UPC_A,
-                BarcodeFormat.UPC_E,
-                BarcodeFormat.ITF,
-                BarcodeFormat.DATA_MATRIX
-            ];
-            hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
-            hints.set(DecodeHintType.TRY_HARDER, true);
+            const html5QrCode = new Html5Qrcode("reader-v");
+            scannerRef.current = html5QrCode;
 
-            const zxingReader = new BrowserMultiFormatReader(hints);
-            zxingReaderRef.current = zxingReader;
+            const devices = await Html5Qrcode.getCameras();
+            setCameras(devices);
 
-            const videoDevices = await zxingReader.listVideoInputDevices();
-            setCameras(videoDevices);
-
-            // Prioritize back camera
             let selectedCameraId = currentCameraId;
-            if (!selectedCameraId && videoDevices.length > 0) {
-                const backCamera = videoDevices.find(device =>
+            if (!selectedCameraId && devices.length > 0) {
+                const backCamera = devices.find(device =>
                     device.label.toLowerCase().includes('back') ||
                     device.label.toLowerCase().includes('traseira') ||
                     device.label.toLowerCase().includes('rear')
                 );
-                selectedCameraId = backCamera ? backCamera.deviceId : videoDevices[0].deviceId;
+                selectedCameraId = backCamera ? backCamera.id : devices[0].id;
                 setCurrentCameraId(selectedCameraId);
             }
 
-            if (!selectedCameraId) throw new Error("Câmera não encontrada");
-
-            setIsScannerActive(true);
-
-            // Removed redundant delay
-
-            // CRITICAL: Double check if user hasn't stopped the scanner during delay
-            if (!zxingReaderRef.current) {
-                console.log("Scanner parado durante a inicialização.");
-                return;
+            if (!selectedCameraId && devices.length === 0) {
+                selectedCameraId = { facingMode: "environment" };
             }
 
-            await zxingReader.decodeFromVideoDevice(
-                selectedCameraId,
-                videoRef.current,
-                async (result, err) => {
-                    if (result) {
-                        if (isProcessingRef.current) return;
-                        isProcessingRef.current = true;
+            const config = {
+                fps: 15,
+                qrbox: (viewWidth, viewHeight) => {
+                    const minEdge = Math.min(viewWidth, viewHeight);
+                    const qrBoxSize = Math.floor(minEdge * 0.7);
+                    return { width: qrBoxSize, height: qrBoxSize };
+                },
+                aspectRatio: 1.0
+            };
 
-                        playSound('success');
+            await html5QrCode.start(
+                selectedCameraId || { facingMode: "environment" },
+                config,
+                async (decodedText) => {
+                    if (isProcessingRef.current) return;
+                    isProcessingRef.current = true;
 
-                        try {
-                            await handleSearch(null, result.getText());
-                            stopScanner(); // Auto-stop on success
-                        } finally {
-                            setTimeout(() => { isProcessingRef.current = false; }, 1500);
-                        }
+                    playSound('success');
+
+                    try {
+                        await handleSearch(null, decodedText);
+                        stopScanner();
+                    } finally {
+                        setTimeout(() => { isProcessingRef.current = false; }, 1500);
                     }
+                },
+                (errorMessage) => {
+                    // skip error
                 }
             );
 
         } catch (err) {
-            console.error("Erro ao iniciar scanner ZXing:", err);
+            console.error("Erro ao iniciar scanner:", err);
             toast.error("Não foi possível acessar a câmera.");
             setIsScannerActive(false);
         }
@@ -278,28 +266,14 @@ export default function Verification() {
 
     // handleImageUpload removido (conforme solicitado)
 
-    const toggleCamera = async () => {
-        if (!zxingReaderRef.current || cameras.length < 2) return;
-
-        const currentIndex = cameras.findIndex(c => c.deviceId === currentCameraId);
-        const nextIndex = (currentIndex + 1) % cameras.length;
-        const nextCameraId = cameras[nextIndex].deviceId;
-
-        try {
-            stopScanner();
-            setCurrentCameraId(nextCameraId);
-            setTimeout(() => startScanner(), 100);
-            toast.info(`Câmera alterada para: ${cameras[nextIndex].label || 'Próxima'}`);
-        } catch (err) {
-            console.error("Erro ao trocar câmera:", err);
-            toast.error("Erro ao trocar de câmera.");
-        }
-    };
-
-    const stopScanner = () => {
-        if (zxingReaderRef.current) {
-            zxingReaderRef.current.reset();
-            zxingReaderRef.current = null;
+    const stopScanner = async () => {
+        if (scannerRef.current) {
+            try {
+                await scannerRef.current.stop();
+                scannerRef.current = null;
+            } catch (err) {
+                console.error("Erro ao parar scanner:", err);
+            }
         }
         setIsScannerActive(false);
     };
@@ -307,9 +281,9 @@ export default function Verification() {
     // Auto-stop on unmount
     useEffect(() => {
         return () => {
-            if (zxingReaderRef.current) {
-                zxingReaderRef.current.reset();
-                zxingReaderRef.current = null;
+            if (scannerRef.current) {
+                scannerRef.current.stop().catch(err => console.error("Unmount cleanup error:", err));
+                scannerRef.current = null;
             }
         };
     }, []);
@@ -421,15 +395,8 @@ export default function Verification() {
 
                     {/* Scanner View */}
                     {isScannerActive && (
-                        <div className="mt-4 overflow-hidden rounded-xl bg-black relative" style={{ minHeight: '300px' }}>
-                            <video
-                                ref={videoRef}
-                                className="w-full h-full object-cover"
-                                playsInline
-                                muted
-                                autoPlay
-                            ></video>
-                            <p className="text-center text-white py-2 text-sm bg-black font-semibold absolute bottom-0 left-0 w-full opacity-70">
+                        <div id="reader-v" className="mt-4 overflow-hidden rounded-xl bg-black relative" style={{ minHeight: '300px' }}>
+                            <p className="text-center text-white py-2 text-sm bg-black font-semibold absolute bottom-0 left-0 w-full opacity-70 z-10">
                                 Escaneando...
                             </p>
                         </div>
