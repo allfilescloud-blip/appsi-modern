@@ -227,13 +227,15 @@ export default function Verification() {
             }
 
             const config = {
-                fps: 15,
-                qrbox: (viewWidth, viewHeight) => {
-                    const minEdge = Math.min(viewWidth, viewHeight);
-                    const qrBoxSize = Math.floor(minEdge * 0.7);
-                    return { width: qrBoxSize, height: qrBoxSize };
+                fps: 20,
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0,
+                experimentalFeatures: {
+                    useBarCodeDetectorIfSupported: true
                 },
-                aspectRatio: 1.0
+                formatsToSupport: [
+                    'qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'itf', 'data_matrix'
+                ]
             };
 
             await html5QrCode.start(
@@ -396,6 +398,18 @@ export default function Verification() {
                     {/* Scanner View */}
                     {isScannerActive && (
                         <div id="reader-v" className="mt-4 overflow-hidden rounded-xl bg-black relative" style={{ minHeight: '300px' }}>
+                            {/* Visual Overlay */}
+                            <div className="scanner-overlay-container">
+                                <div className="scanner-box">
+                                    <div className="scanner-corner-tl"></div>
+                                    <div className="scanner-corner-tr"></div>
+                                    <div className="scanner-corner-bl"></div>
+                                    <div className="scanner-corner-br"></div>
+                                    <div className="scanning-line"></div>
+                                    <p className="scanner-hint">Aponte para o código</p>
+                                </div>
+                            </div>
+
                             <p className="text-center text-white py-2 text-sm bg-black font-semibold absolute bottom-0 left-0 w-full opacity-70 z-10">
                                 Escaneando...
                             </p>

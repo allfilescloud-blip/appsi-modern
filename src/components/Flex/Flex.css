@@ -631,3 +631,93 @@
         background: white;
     }
 }
+
+/* Scanner Visual Feedback */
+.scanner-overlay-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 5;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.scanner-box {
+    width: 250px;
+    height: 250px;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 12px;
+    position: relative;
+}
+
+/* Background dimming effect using overlay */
+.scanner-overlay-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 4;
+}
+
+.scanner-box::before,
+.scanner-box::after,
+.scanner-corner-tl,
+.scanner-corner-tr,
+.scanner-corner-bl,
+.scanner-corner-br {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-color: #3b82f6; /* Blue-500 */
+    border-style: solid;
+    z-index: 10;
+}
+
+.scanner-box {
+    box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.5);
+    z-index: 6;
+}
+
+.scanner-corner-tl { top: -2px; left: -2px; border-width: 4px 0 0 4px; border-top-left-radius: 8px; }
+.scanner-corner-tr { top: -2px; right: -2px; border-width: 4px 4px 0 0; border-top-right-radius: 8px; }
+.scanner-corner-bl { bottom: -2px; left: -2px; border-width: 0 0 4px 4px; border-bottom-left-radius: 8px; }
+.scanner-corner-br { bottom: -2px; right: -2px; border-width: 0 4px 4px 0; border-bottom-right-radius: 8px; }
+
+.scanning-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(to bottom, transparent, #3b82f6, transparent);
+    box-shadow: 0 0 8px #3b82f6;
+    animation: scan-mobile 2.5s infinite linear;
+    z-index: 7;
+}
+
+@keyframes scan-mobile {
+    0% { top: 0%; }
+    50% { top: 100%; }
+    100% { top: 0%; }
+}
+
+.scanner-hint {
+    position: absolute;
+    bottom: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    z-index: 10;
+}
