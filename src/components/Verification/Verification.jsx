@@ -226,10 +226,7 @@ export default function Verification() {
 
                     playSound('success');
                     try {
-                        const status = await handleSearch(null, decodedText);
-                        if (status === 'success' || status === 'duplicate') {
-                            stopScanner();
-                        }
+                        await handleSearch(null, decodedText);
                     } finally {
                         setTimeout(() => { isProcessingRef.current = false; }, 1500);
                     }
