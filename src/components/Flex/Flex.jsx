@@ -339,14 +339,35 @@ const Flex = () => {
         }
     };
 
+    const toggleCamera = async () => {
+        if (!scannerRef.current || cameras.length < 2) return;
+
+        const currentIndex = cameras.findIndex(c => c.id === currentCameraId);
+        const nextIndex = (currentIndex + 1) % cameras.length;
+        const nextCameraId = cameras[nextIndex].id;
+
+        try {
+            await stopScanner();
+            setCurrentCameraId(nextCameraId);
+            // Small delay to ensure clean state
+            setTimeout(() => startScanner(), 150);
+            toast.info(`Câmera alterada: ${cameras[nextIndex].label || 'Próxima'}`);
+        } catch (err) {
+            console.error("Erro ao trocar câmera:", err);
+            toast.error("Erro ao trocar de câmera.");
+        }
+    };
+
     const stopScanner = async () => {
-        if (scannerRef.current) {
+        if (scannerRef.current && scannerRef.current.isScanning) {
             try {
                 await scannerRef.current.stop();
                 scannerRef.current = null;
             } catch (err) {
                 console.error("Erro ao parar scanner:", err);
             }
+        } else {
+            scannerRef.current = null;
         }
         setIsScannerActive(false);
     };
@@ -354,10 +375,10 @@ const Flex = () => {
     // Auto-stop on unmount
     useEffect(() => {
         return () => {
-            if (scannerRef.current) {
+            if (scannerRef.current && scannerRef.current.isScanning) {
                 scannerRef.current.stop().catch(err => console.error("Unmount cleanup error:", err));
-                scannerRef.current = null;
             }
+            scannerRef.current = null;
         };
     }, []);
 
