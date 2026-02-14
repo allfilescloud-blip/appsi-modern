@@ -279,14 +279,11 @@ const Flex = () => {
 
             const config = {
                 fps: 20,
-                qrbox: { width: 250, height: 250 },
+                qrbox: { width: 300, height: 150 },
                 aspectRatio: 1.0,
                 experimentalFeatures: {
                     useBarCodeDetectorIfSupported: true
-                },
-                formatsToSupport: [
-                    'qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'itf', 'data_matrix'
-                ]
+                }
             };
 
             await html5QrCode.start(
@@ -339,35 +336,14 @@ const Flex = () => {
         }
     };
 
-    const toggleCamera = async () => {
-        if (!scannerRef.current || cameras.length < 2) return;
-
-        const currentIndex = cameras.findIndex(c => c.id === currentCameraId);
-        const nextIndex = (currentIndex + 1) % cameras.length;
-        const nextCameraId = cameras[nextIndex].id;
-
-        try {
-            await stopScanner();
-            setCurrentCameraId(nextCameraId);
-            // Small delay to ensure clean state
-            setTimeout(() => startScanner(), 150);
-            toast.info(`Câmera alterada: ${cameras[nextIndex].label || 'Próxima'}`);
-        } catch (err) {
-            console.error("Erro ao trocar câmera:", err);
-            toast.error("Erro ao trocar de câmera.");
-        }
-    };
-
     const stopScanner = async () => {
-        if (scannerRef.current && scannerRef.current.isScanning) {
+        if (scannerRef.current) {
             try {
                 await scannerRef.current.stop();
                 scannerRef.current = null;
             } catch (err) {
                 console.error("Erro ao parar scanner:", err);
             }
-        } else {
-            scannerRef.current = null;
         }
         setIsScannerActive(false);
     };
@@ -375,10 +351,10 @@ const Flex = () => {
     // Auto-stop on unmount
     useEffect(() => {
         return () => {
-            if (scannerRef.current && scannerRef.current.isScanning) {
+            if (scannerRef.current) {
                 scannerRef.current.stop().catch(err => console.error("Unmount cleanup error:", err));
+                scannerRef.current = null;
             }
-            scannerRef.current = null;
         };
     }, []);
 
