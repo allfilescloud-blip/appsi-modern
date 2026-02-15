@@ -211,7 +211,7 @@ export default function Verification() {
 
             const config = {
                 fps: 20,
-                qrbox: { width: 300, height: 150 },
+                qrbox: { width: 300, height: 300 },
                 aspectRatio: 1.0
             };
 
