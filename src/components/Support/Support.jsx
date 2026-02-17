@@ -366,7 +366,7 @@ export default function Support() {
     };
 
     return (
-        <div className="p-4 md:p-6 max-w-[1600px] mx-auto">
+        <div className="p-4 md:p-6 w-full mx-auto">
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <div>
@@ -426,7 +426,7 @@ export default function Support() {
                     {/* Desktop Table View */}
                     <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse min-w-[1000px]">
+                            <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-200 text-xs uppercase text-gray-500 font-semibold">
                                         <th className="px-6 py-4 w-24">Código</th>
@@ -448,12 +448,12 @@ export default function Support() {
                                                 {record.location || '-'}
                                             </td>
                                             <td className="px-6 py-4 text-sm text-gray-600">
-                                                <div className="line-clamp-2 max-w-md" title={record.description}>
+                                                <div className="line-clamp-2" title={record.description}>
                                                     {record.description}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-sm text-gray-600">
-                                                <div className="line-clamp-2 max-w-md" title={record.correction}>
+                                                <div className="line-clamp-2" title={record.correction}>
                                                     {record.correction}
                                                 </div>
                                             </td>
