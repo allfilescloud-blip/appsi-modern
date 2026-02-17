@@ -394,7 +394,7 @@ export default function TicketForm() {
                             ) : (
                                 <>
                                     <Save className="w-5 h-5" />
-                                    Salvar Chamado
+                                    Salvar
                                 </>
                             )}
                         </button>

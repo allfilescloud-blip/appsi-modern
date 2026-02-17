@@ -862,7 +862,7 @@ const Flex = () => {
                                     className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm flex items-center gap-2 transition-all disabled:opacity-70"
                                     onClick={saveReport}
                                 >
-                                    <Save size={18} /> Salvar Relatório
+                                    <Save size={18} /> Salvar
                                 </button>
                             </div>
                         </div>

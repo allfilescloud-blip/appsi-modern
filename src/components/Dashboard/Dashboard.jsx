@@ -11,6 +11,10 @@ import {
     TrendingDown
 } from 'lucide-react';
 import { Bar, Doughnut } from 'react-chartjs-2';
+import { getOpenOrdersSummary } from '../../services/ideris';
+import {
+    ShoppingCart,
+} from 'lucide-react';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -45,6 +49,8 @@ export default function Dashboard() {
     const [userStats, setUserStats] = useState([]); // Array of { name: 'User', count: 10 }
     const [chartData, setChartData] = useState(null);
     const [monthlyChartData, setMonthlyChartData] = useState(null);
+    const [iderisStats, setIderisStats] = useState(null);
+    const [iderisLoading, setIderisLoading] = useState(true);
 
     useEffect(() => {
         async function fetchStats() {
@@ -163,7 +169,19 @@ export default function Dashboard() {
         }
 
 
+        async function fetchIderisStats() {
+            try {
+                const data = await getOpenOrdersSummary();
+                setIderisStats(data);
+            } catch (error) {
+                console.error("Erro ao buscar estatísticas do Ideris:", error);
+            } finally {
+                setIderisLoading(false);
+            }
+        }
+
         fetchStats();
+        fetchIderisStats();
     }, []);
 
     if (loading) {
@@ -228,6 +246,58 @@ export default function Dashboard() {
                     </div>
                     <div className="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center">
                         <Calendar className="w-6 h-6 text-purple-600" />
+                    </div>
+                </div>
+            </div>
+
+            {/* Pedidos Ideris */}
+            <div className="space-y-4">
+                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <ShoppingCart className="w-6 h-6 text-blue-600" />
+                    Resumo de Pedidos (Ideris)
+                </h3>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Card Total Ideris */}
+                    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center justify-between col-span-1">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500 mb-1">Total em Aberto no Ideris</p>
+                            {iderisLoading ? (
+                                <div className="h-8 w-16 bg-gray-100 animate-pulse rounded"></div>
+                            ) : (
+                                <h3 className="text-3xl font-bold text-gray-800">{iderisStats?.total || 0}</h3>
+                            )}
+                            <span className="text-xs text-blue-500 flex items-center gap-1 mt-1">
+                                <AlertCircle className="w-3 h-3" /> Status: Aberto
+                            </span>
+                        </div>
+                        <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
+                            <ShoppingCart className="w-6 h-6 text-blue-600" />
+                        </div>
+                    </div>
+
+                    {/* Breakdown por Conta */}
+                    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 col-span-1 lg:col-span-2">
+                        <p className="text-sm font-medium text-gray-500 mb-4">Quantidade por Conta de Marketplace</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {iderisLoading ? (
+                                [1, 2, 3, 4].map(i => (
+                                    <div key={i} className="h-14 bg-gray-50 animate-pulse rounded-lg"></div>
+                                ))
+                            ) : (
+                                iderisStats?.byAccount.map((account, index) => (
+                                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                        <p className="font-semibold text-gray-700 truncate mr-2" title={account.name}>{account.name}</p>
+                                        <div className="px-2 py-1 bg-white rounded text-sm font-bold text-blue-600 border border-gray-200">
+                                            {account.count}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                            {!iderisLoading && (!iderisStats || iderisStats.byAccount.length === 0) && (
+                                <p className="text-gray-500 text-sm italic">Nenhum pedido em aberto encontrado.</p>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

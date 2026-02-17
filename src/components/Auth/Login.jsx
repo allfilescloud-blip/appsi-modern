@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth, db } from "../../services/firebase";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { LogIn, UserPlus, Headphones } from "lucide-react";
@@ -12,7 +12,23 @@ export default function Login() {
     const [password, setPassword] = useState("");
     const [name, setName] = useState("");
     const [loading, setLoading] = useState(false);
+    const [allowRegistration, setAllowRegistration] = useState(true);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const fetchSettings = async () => {
+            try {
+                const docRef = doc(db, "sys_settings", "general");
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    setAllowRegistration(docSnap.data().allowRegistration !== false);
+                }
+            } catch (error) {
+                console.error("Erro ao buscar configurações:", error);
+            }
+        };
+        fetchSettings();
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -122,17 +138,19 @@ export default function Login() {
                         </button>
                     </form>
 
-                    <div className="mt-8 text-center pt-6 border-t border-gray-100">
-                        <p className="text-gray-600 text-sm">
-                            {isLogin ? "Não tem uma conta?" : "Já possui conta?"}
-                            <button
-                                onClick={() => setIsLogin(!isLogin)}
-                                className="ml-2 font-semibold text-blue-600 hover:text-blue-800 transition-colors"
-                            >
-                                {isLogin ? "Cadastre-se" : "Fazer Login"}
-                            </button>
-                        </p>
-                    </div>
+                    {allowRegistration && (
+                        <div className="mt-8 text-center pt-6 border-t border-gray-100">
+                            <p className="text-gray-600 text-sm">
+                                {isLogin ? "Não tem uma conta?" : "Já possui conta?"}
+                                <button
+                                    onClick={() => setIsLogin(!isLogin)}
+                                    className="ml-2 font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                                >
+                                    {isLogin ? "Cadastre-se" : "Fazer Login"}
+                                </button>
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -8,6 +8,11 @@ service cloud.firestore {
     }
 
     // Dynamic System Settings (General Registrations)
+    match /sys_settings/general {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+    
     match /sys_settings/{document=**} {
       allow read, write: if isAuthenticated();
     }

@@ -1,5 +1,6 @@
 import { useAuth } from "../../context/AuthContext";
-import { User, Shield, Bell, Save, Database, Plus, Trash2, Loader } from "lucide-react";
+import { User, Shield, Bell, Save, Database, Plus, Trash2, Loader, RefreshCcw } from "lucide-react";
+import Swal from 'sweetalert2';
 import { useState, useEffect } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../../services/firebase";
@@ -14,16 +15,15 @@ export default function Settings() {
     // Dynamic settings state
     const [generalSettings, setGeneralSettings] = useState({
         ticketTypes: [],
-        marketplaces: []
+        marketplaces: [],
+        allowRegistration: true
     });
     const [newItem, setNewItem] = useState("");
     const [activeList, setActiveList] = useState("ticketTypes"); // 'ticketTypes' or 'marketplaces'
 
     useEffect(() => {
-        if (activeTab === "cadastros") {
-            fetchGeneralSettings();
-        }
-    }, [activeTab]);
+        fetchGeneralSettings();
+    }, []);
 
     const fetchGeneralSettings = async () => {
         setLoadingSettings(true);
@@ -41,7 +41,8 @@ export default function Settings() {
                         'Interno', 'Defeito', 'Prejuízo', 'Atraso na entrega', 'Produto errado',
                         'Faltou item', 'Dúvida técnica', 'Cancelamento'
                     ],
-                    marketplaces: ['Mercado Livre', 'Amazon', 'Interno', 'Shopee', 'Magalu']
+                    marketplaces: ['Mercado Livre', 'Amazon', 'Interno', 'Shopee', 'Magalu'],
+                    allowRegistration: true
                 };
                 await setDoc(docRef, defaults);
                 setGeneralSettings(defaults);
@@ -85,8 +86,58 @@ export default function Settings() {
         }
     };
 
-    const handleSave = () => {
-        toast.success("Configurações salvas com sucesso!");
+    const handleSave = async () => {
+        // Proteção: Não salvar se as listas estiverem vazias e o estado estiver carregando ou falhou
+        if (generalSettings.ticketTypes.length === 0 && generalSettings.marketplaces.length === 0) {
+            toast.error("Erro: Dados de configuração não carregados corretamente. Recarregue a página.");
+            return;
+        }
+
+        setLoadingSettings(true);
+        try {
+            await setDoc(doc(db, "sys_settings", "general"), generalSettings, { merge: true });
+            toast.success("Configurações salvas com sucesso!");
+        } catch (error) {
+            console.error("Error saving settings:", error);
+            toast.error("Erro ao salvar configurações.");
+        } finally {
+            setLoadingSettings(false);
+        }
+    };
+
+    const handleRestoreDefaults = async () => {
+        const result = await Swal.fire({
+            title: 'Restaurar Padrões?',
+            text: "Isso irá repopular as listas com os valores originais (Devolução, Marketplaces, etc).",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sim, restaurar',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (result.isConfirmed) {
+            const defaults = {
+                ticketTypes: [
+                    'Devolução', 'Reembolso', 'Fraude', 'Contatar MarketPlace', 'Contatar Cliente',
+                    'Interno', 'Defeito', 'Prejuízo', 'Atraso na entrega', 'Produto errado',
+                    'Faltou item', 'Dúvida técnica', 'Cancelamento'
+                ],
+                marketplaces: ['Mercado Livre', 'Amazon', 'Interno', 'Shopee', 'Magalu'],
+                allowRegistration: generalSettings.allowRegistration
+            };
+
+            setLoadingSettings(true);
+            try {
+                await setDoc(doc(db, "sys_settings", "general"), defaults, { merge: true });
+                setGeneralSettings(defaults);
+                toast.success("Padrões restaurados com sucesso!");
+            } catch (error) {
+                console.error("Error restoring defaults:", error);
+                toast.error("Erro ao restaurar padrões.");
+            } finally {
+                setLoadingSettings(false);
+            }
+        }
     };
 
     return (
@@ -191,6 +242,22 @@ export default function Settings() {
 
                     {activeTab === "seguranca" && (
                         <div className="space-y-6 animate-fade-in">
+                            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                                <div>
+                                    <h3 className="font-medium text-gray-800">Permitir Novos Cadastros</h3>
+                                    <p className="text-sm text-gray-500">Habilita ou desabilita a opção de "Cadastre-se" na tela de login.</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={generalSettings.allowRegistration}
+                                        onChange={e => setGeneralSettings(prev => ({ ...prev, allowRegistration: e.target.checked }))}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+
                             <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                                 <h3 className="font-bold text-yellow-800 text-sm mb-1">Alterar Senha</h3>
                                 <p className="text-yellow-700 text-sm">Para alterar sua senha, enviaremos um link de redefinição para seu email cadastrado.</p>
@@ -233,9 +300,18 @@ export default function Settings() {
 
                                     {/* Management Area */}
                                     <div className="md:col-span-2 space-y-4">
-                                        <h3 className="text-lg font-bold text-gray-800 border-b pb-2">
-                                            {activeList === "ticketTypes" ? "Gerenciar Tipos de Chamado" : "Gerenciar Marketplaces"}
-                                        </h3>
+                                        <div className="flex justify-between items-center border-b pb-2">
+                                            <h3 className="text-lg font-bold text-gray-800">
+                                                {activeList === "ticketTypes" ? "Gerenciar Tipos de Chamado" : "Gerenciar Marketplaces"}
+                                            </h3>
+                                            <button
+                                                onClick={handleRestoreDefaults}
+                                                className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 px-2 py-1 rounded"
+                                                title="Restaura os valores sugeridos pelo sistema"
+                                            >
+                                                <RefreshCcw className="w-3 h-3" /> Restaurar Padrões
+                                            </button>
+                                        </div>
 
                                         <div className="flex gap-2">
                                             <input

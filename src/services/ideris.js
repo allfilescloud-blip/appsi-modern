@@ -157,4 +157,50 @@ export const updateStock = async (sku, quantity) => {
     return response.data;
 };
 
+// Implementação para o Dashboard
+export const getOpenOrdersSummary = async () => {
+    if (!jwtToken) await loginIderis();
+
+    try {
+        // 1. Buscar todas as contas de marketplace ativas
+        const mktResponse = await api.get('/settings/marketplace');
+        const accounts = mktResponse.data.obj || [];
+
+        // 2. Buscar o total de pedidos em aberto para cada conta em paralelo
+        const accountStatsPromises = accounts.map(async (acc) => {
+            try {
+                const response = await api.get('/order/search', {
+                    params: {
+                        statusId: 1007, // Aberto
+                        authenticationId: acc.id,
+                        limit: 1 // Só precisamos do total no retorno
+                    }
+                });
+                return {
+                    name: acc.descricao || `Conta ${acc.id}`,
+                    count: response.data.total || 0
+                };
+            } catch (error) {
+                console.warn(`Erro ao buscar pedidos para conta ${acc.descricao}:`, error.message);
+                return { name: acc.descricao, count: 0 };
+            }
+        });
+
+        const byAccount = await Promise.all(accountStatsPromises);
+
+        // 3. Calcular o total geral e filtrar apenas as que têm pedidos ou são relevantes
+        const total = byAccount.reduce((sum, item) => sum + item.count, 0);
+
+        return {
+            total,
+            byAccount: byAccount
+                .filter(item => item.count > 0) // Mostra apenas as que têm pedidos pendentes
+                .sort((a, b) => b.count - a.count)
+        };
+    } catch (error) {
+        console.error("Erro ao buscar resumo de pedidos em aberto:", error);
+        throw error;
+    }
+};
+
 export default api;

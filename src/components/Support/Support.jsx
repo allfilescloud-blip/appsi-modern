@@ -623,49 +623,52 @@ export default function Support() {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Evidências (Imagens)</label>
+                                <div
+                                    className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer relative"
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                        accept="image/*"
+                                        multiple
+                                        onChange={handleImageSelect}
+                                    />
+                                    <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                                    <p className="text-sm text-gray-500">Clique ou arraste imagens aqui</p>
+                                    <p className="text-xs text-gray-400 mt-1">Máx. {MAX_IMAGES} imagens (2MB cada)</p>
+                                </div>
 
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-3">
-                                    {selectedImages.map((img, index) => (
-                                        <div key={index} className="relative group aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
-                                            <img
-                                                src={img.url}
-                                                alt="Preview"
-                                                className="w-full h-full object-cover"
-                                            />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                {/* Lista de Imagens Selecionadas */}
+                                {selectedImages.length > 0 && (
+                                    <div className="mt-4 space-y-2">
+                                        {selectedImages.map((img, idx) => (
+                                            <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                                <div className="flex items-center gap-3">
+                                                    {img.isExisting ? (
+                                                        <ImageIcon className="w-5 h-5 text-blue-600" />
+                                                    ) : (
+                                                        <ImageIcon className="w-5 h-5 text-gray-500" />
+                                                    )}
+                                                    <div>
+                                                        <p className="text-sm text-gray-700 truncate">{img.name}</p>
+                                                        <p className="text-xs text-gray-500">
+                                                            {(img.size / 1024).toFixed(1)} KB {img.isExisting && '(Existente)'}
+                                                        </p>
+                                                    </div>
+                                                </div>
                                                 <button
                                                     type="button"
-                                                    onClick={() => removeImage(index)}
-                                                    className="p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                                                    onClick={() => removeImage(idx)}
+                                                    className="text-gray-400 hover:text-red-500 p-1"
                                                 >
-                                                    <Trash2 size={16} />
+                                                    <X className="w-5 h-5" />
                                                 </button>
                                             </div>
-                                        </div>
-                                    ))}
-
-                                    {selectedImages.length < MAX_IMAGES && (
-                                        <button
-                                            type="button"
-                                            onClick={() => fileInputRef.current?.click()}
-                                            className="aspect-square flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg hover:bg-gray-100 hover:border-gray-400 transition-colors text-gray-400 hover:text-gray-600"
-                                        >
-                                            <Upload size={24} className="mb-2" />
-                                            <span className="text-xs font-medium">Add Imagem</span>
-                                        </button>
-                                    )}
-                                </div>
-                                <input
-                                    type="file"
-                                    ref={fileInputRef}
-                                    className="hidden"
-                                    accept="image/*"
-                                    multiple
-                                    onChange={handleImageSelect}
-                                />
-                                <p className="text-xs text-gray-400">
-                                    Máx: {MAX_IMAGES} imagens (2MB cada)
-                                </p>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
@@ -687,7 +690,7 @@ export default function Support() {
                                     ) : (
                                         <Save size={18} />
                                     )}
-                                    {saving ? 'Salvando...' : 'Salvar Registro'}
+                                    {saving ? 'Salvando...' : 'Salvar'}
                                 </button>
                             </div>
                         </form>
