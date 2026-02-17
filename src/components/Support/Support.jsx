@@ -424,7 +424,7 @@ export default function Support() {
             ) : (
                 <>
                     {/* Desktop Table View */}
-                    <div className="hidden lg:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse min-w-[1000px]">
                                 <thead>
@@ -490,7 +490,7 @@ export default function Support() {
                     </div>
 
                     {/* Mobile Card View */}
-                    <div className="lg:hidden grid gap-4">
+                    <div className="md:hidden grid gap-4">
                         {filteredRecords.map((record) => (
                             <div key={record.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
                                 <div className="flex justify-between items-start mb-3">
