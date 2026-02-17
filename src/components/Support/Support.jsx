@@ -366,7 +366,7 @@ export default function Support() {
     };
 
     return (
-        <div className="p-4 md:p-6 w-full mx-auto">
+        <div className="space-y-6">
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <div>
@@ -426,25 +426,25 @@ export default function Support() {
                     {/* Desktop Table View */}
                     <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
+                            <table className="w-full text-left">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-200 text-xs uppercase text-gray-500 font-semibold">
-                                        <th className="px-6 py-4 w-24">Código</th>
-                                        <th className="px-6 py-4 w-48">Local</th>
-                                        <th className="px-6 py-4">Descrição do Erro</th>
-                                        <th className="px-6 py-4">Correção</th>
-                                        <th className="px-6 py-4 text-right w-32">Ações</th>
+                                        <th className="px-6 py-3 tracking-wider w-24">Código</th>
+                                        <th className="px-6 py-3 tracking-wider w-48">Local</th>
+                                        <th className="px-6 py-3 tracking-wider">Descrição do Erro</th>
+                                        <th className="px-6 py-3 tracking-wider">Correção</th>
+                                        <th className="px-6 py-3 tracking-wider text-right w-32">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {filteredRecords.map((record) => (
                                         <tr key={record.id} className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-6 py-4">
+                                            <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                                                     {record.code}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-gray-700 font-medium">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-medium">
                                                 {record.location || '-'}
                                             </td>
                                             <td className="px-6 py-4 text-sm text-gray-600">
@@ -490,51 +490,53 @@ export default function Support() {
                     </div>
 
                     {/* Mobile Card View */}
-                    <div className="md:hidden grid gap-4">
-                        {filteredRecords.map((record) => (
-                            <div key={record.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                                <div className="flex justify-between items-start mb-3">
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                        {record.code}
-                                    </span>
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={() => openViewModal(record)}
-                                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
-                                        >
-                                            <Eye size={16} />
-                                        </button>
-                                        <button
-                                            onClick={() => openEditModal(record)}
-                                            className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg"
-                                        >
-                                            <Edit size={16} />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(record)}
-                                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
+                    <div className="md:hidden bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="divide-y divide-gray-200">
+                            {filteredRecords.map((record) => (
+                                <div key={record.id} className="p-4 hover:bg-gray-50 transition-colors">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                            {record.code}
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => openViewModal(record)}
+                                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
+                                            >
+                                                <Eye size={16} />
+                                            </button>
+                                            <button
+                                                onClick={() => openEditModal(record)}
+                                                className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg"
+                                            >
+                                                <Edit size={16} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(record)}
+                                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div className="space-y-3">
-                                    <div>
-                                        <span className="text-xs text-gray-400 uppercase font-semibold">Local</span>
-                                        <p className="text-sm font-medium text-gray-800">{record.location || 'Não informado'}</p>
-                                    </div>
-                                    <div>
-                                        <span className="text-xs text-gray-400 uppercase font-semibold">Descrição</span>
-                                        <p className="text-sm text-gray-600 line-clamp-2">{record.description}</p>
-                                    </div>
-                                    <div>
-                                        <span className="text-xs text-gray-400 uppercase font-semibold">Correção</span>
-                                        <p className="text-sm text-gray-600 line-clamp-2">{record.correction || '-'}</p>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <span className="text-xs text-gray-400 uppercase font-semibold">Local</span>
+                                            <p className="text-sm font-medium text-gray-800">{record.location || 'Não informado'}</p>
+                                        </div>
+                                        <div>
+                                            <span className="text-xs text-gray-400 uppercase font-semibold">Descrição</span>
+                                            <p className="text-sm text-gray-600 line-clamp-2">{record.description}</p>
+                                        </div>
+                                        <div>
+                                            <span className="text-xs text-gray-400 uppercase font-semibold">Correção</span>
+                                            <p className="text-sm text-gray-600 line-clamp-2">{record.correction || '-'}</p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
                 </>
             )}
