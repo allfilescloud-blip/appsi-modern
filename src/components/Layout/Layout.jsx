@@ -252,7 +252,7 @@ export default function Layout({ children }) {
             )}
 
             {/* Main Content */}
-            <main className={`flex-1 transition-all duration-300 ease-in-out p-6 pt-20 md:pt-6 print:m-0 print:p-0 ${isExpanded ? 'md:ml-64' : 'md:ml-20'
+            <main className={`flex-1 transition-all duration-300 ease-in-out p-6 pt-20 md:pt-10 pb-10 print:m-0 print:p-0 ${isExpanded ? 'md:ml-64' : 'md:ml-20'
                 }`}>
                 <div className="max-w-7xl mx-auto">
                     {children}

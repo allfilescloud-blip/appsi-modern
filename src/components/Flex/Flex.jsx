@@ -140,7 +140,7 @@ const Flex = () => {
         const year = now.getFullYear();
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
-        return `Relatório_Flex_${day}${month}${year}${hours}${minutes}`;
+        return `Flex_${day}${month}${year}${hours}${minutes}`;
     };
 
     const extractMLIdFromJson = (jsonString) => {
@@ -396,7 +396,7 @@ const Flex = () => {
                 await updateDoc(doc(db, "reports", currentReportId), dataToSave);
 
                 // Manual state update for Edit
-                setReports(prev => prev.map(r => r.firebaseId === currentReportId ? { ...dataToSave, firebaseId: currentReportId } : r));
+                setReports(prev => prev.map(r => r.firebaseId === currentReportId ? { ...r, ...dataToSave } : r));
 
                 toast.success("Relatório atualizado!");
                 stopScanner(); // Auto-stop scanner on update
@@ -633,7 +633,7 @@ const Flex = () => {
                                 <div>
                                     <span className="mobile-label">Itens:</span>
                                     <span className="flex-report-items-count">
-                                        {report.items?.length || 0} itens
+                                        {report.items?.length || 0}
                                     </span>
                                 </div>
                                 <div className="flex-report-actions">
@@ -792,7 +792,7 @@ const Flex = () => {
                                 <h3 className="flex items-center gap-2 mb-3 font-semibold text-gray-700">
                                     <List size={18} /> Itens do Relatório
                                     <span className="ml-auto bg-blue-600 text-white text-sm font-bold px-3 py-1 rounded-full shadow-sm">
-                                        {reportForm.items.length} {reportForm.items.length === 1 ? 'item' : 'itens'}
+                                        {reportForm.items.length}
                                     </span>
                                 </h3>
                                 <div className="max-h-60 overflow-auto border rounded-lg">

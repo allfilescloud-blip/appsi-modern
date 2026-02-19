@@ -368,7 +368,7 @@ export default function Support() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                         <AlertTriangle className="w-8 h-8 text-orange-500" />
@@ -381,7 +381,7 @@ export default function Support() {
 
                 <button
                     onClick={openNewRecordModal}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors font-medium shadow-sm w-full md:w-auto justify-center"
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors font-medium shadow-sm"
                 >
                     <Plus size={20} />
                     Novo Registro
@@ -389,54 +389,56 @@ export default function Support() {
             </div>
 
             {/* Search Bar */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6">
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                    <input
-                        type="text"
-                        placeholder="Buscar por código, local ou descrição..."
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                        value={searchTerm}
-                        onChange={handleSearch}
-                    />
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <div className="flex flex-col lg:flex-row gap-4">
+                    <div className="flex-1 relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                        <input
+                            type="text"
+                            placeholder="Buscar por código, local ou descrição..."
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                            value={searchTerm}
+                            onChange={handleSearch}
+                        />
+                    </div>
                 </div>
             </div>
 
-            {/* Content */}
-            {loading ? (
-                <div className="flex justify-center items-center py-20">
-                    <Loader className="w-8 h-8 text-blue-600 animate-spin" />
-                </div>
-            ) : filteredRecords.length === 0 ? (
-                <div className="text-center py-16 bg-white rounded-xl shadow-sm border border-gray-200">
-                    <div className="flex justify-center mb-4">
-                        <div className="p-4 bg-gray-100 rounded-full">
-                            <Search className="w-8 h-8 text-gray-400" />
-                        </div>
+            {/* Content Container */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                {loading ? (
+                    <div className="flex justify-center items-center py-20">
+                        <Loader className="w-8 h-8 text-blue-600 animate-spin" />
                     </div>
-                    <h3 className="text-lg font-medium text-gray-900">Nenhum registro encontrado</h3>
-                    <p className="text-gray-500 mt-1 max-w-sm mx-auto">
-                        {searchTerm
-                            ? `Não encontramos resultados para "${searchTerm}"`
-                            : "Nenhum erro registrado ainda. Clique em 'Novo Registro' para começar."}
-                    </p>
-                </div>
-            ) : (
-                <>
-                    {/* Desktop Table View */}
-                    <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                        <div className="overflow-x-auto">
+                ) : filteredRecords.length === 0 ? (
+                    <div className="text-center py-16">
+                        <div className="flex justify-center mb-4">
+                            <div className="p-4 bg-gray-100 rounded-full">
+                                <Search className="w-8 h-8 text-gray-400" />
+                            </div>
+                        </div>
+                        <h3 className="text-lg font-medium text-gray-900">Nenhum registro encontrado</h3>
+                        <p className="text-gray-500 mt-1 max-w-sm mx-auto">
+                            {searchTerm
+                                ? `Não encontramos resultados para "${searchTerm}"`
+                                : "Nenhum erro registrado ainda. Clique em 'Novo Registro' para começar."}
+                        </p>
+                    </div>
+                ) : (
+                    <>
+                        {/* Desktop Table View */}
+                        <div className="hidden lg:block overflow-x-auto">
                             <table className="w-full text-left">
-                                <thead>
-                                    <tr className="bg-gray-50 border-b border-gray-200 text-xs uppercase text-gray-500 font-semibold">
-                                        <th className="px-6 py-3 tracking-wider w-24">Código</th>
-                                        <th className="px-6 py-3 tracking-wider w-48">Local</th>
-                                        <th className="px-6 py-3 tracking-wider">Descrição do Erro</th>
-                                        <th className="px-6 py-3 tracking-wider">Correção</th>
-                                        <th className="px-6 py-3 tracking-wider text-right w-32">Ações</th>
+                                <thead className="bg-gray-50 border-b border-gray-200">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Código</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Local</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Descrição do Erro</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Correção</th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Ações</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-100">
+                                <tbody className="divide-y divide-gray-200">
                                     {filteredRecords.map((record) => (
                                         <tr key={record.id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4 whitespace-nowrap">
@@ -487,11 +489,9 @@ export default function Support() {
                                 </tbody>
                             </table>
                         </div>
-                    </div>
 
-                    {/* Mobile Card View */}
-                    <div className="md:hidden bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                        <div className="divide-y divide-gray-200">
+                        {/* Mobile List View */}
+                        <div className="lg:hidden divide-y divide-gray-200">
                             {filteredRecords.map((record) => (
                                 <div key={record.id} className="p-4 hover:bg-gray-50 transition-colors">
                                     <div className="flex justify-between items-start mb-3">
@@ -537,9 +537,9 @@ export default function Support() {
                                 </div>
                             ))}
                         </div>
-                    </div>
-                </>
-            )}
+                    </>
+                )}
+            </div>
 
             {/* Form Modal (Add/Edit) */}
             {isFormModalOpen && (

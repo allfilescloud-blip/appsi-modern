@@ -63,6 +63,7 @@ export default function TicketList() {
 
     const [typeFilter, setTypeFilter] = useState('Todos');
     const [marketplaceFilter, setMarketplaceFilter] = useState('Todos');
+    const [responsibleFilter, setResponsibleFilter] = useState('Todos');
 
     const filteredTickets = tickets.filter(ticket => {
         const matchesSearch =
@@ -74,8 +75,9 @@ export default function TicketList() {
         const matchesStatus = statusFilter === 'Todos' || ticket.status === statusFilter;
         const matchesType = typeFilter === 'Todos' || ticket.tipo === typeFilter;
         const matchesMarketplace = marketplaceFilter === 'Todos' || ticket.marketplace === marketplaceFilter;
+        const matchesResponsible = responsibleFilter === 'Todos' || ticket.responsavel === responsibleFilter;
 
-        return matchesSearch && matchesStatus && matchesType && matchesMarketplace;
+        return matchesSearch && matchesStatus && matchesType && matchesMarketplace && matchesResponsible;
     });
 
     const getStatusColor = (status) => {
@@ -110,7 +112,7 @@ export default function TicketList() {
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex flex-col lg:flex-row gap-4">
                     <div className="flex-1 relative">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                         <input
@@ -121,7 +123,7 @@ export default function TicketList() {
                             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                         />
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap mt-4 lg:mt-0">
                         <Filter className="text-gray-400 w-5 h-5 hidden sm:block" />
                         <select
                             value={statusFilter}
@@ -152,6 +154,17 @@ export default function TicketList() {
                             <option value="Todos">Todos os Marketplaces</option>
                             {marketplacesOptions.map(mp => (
                                 <option key={mp} value={mp}>{mp}</option>
+                            ))}
+                        </select>
+
+                        <select
+                            value={responsibleFilter}
+                            onChange={(e) => setResponsibleFilter(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                        >
+                            <option value="Todos">Todos os Responsáveis</option>
+                            {[...new Set(tickets.map(t => t.responsavel).filter(Boolean))].sort().map(resp => (
+                                <option key={resp} value={resp}>{resp}</option>
                             ))}
                         </select>
                     </div>
