@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { db } from '../../services/firebase';
 import { collection, query, orderBy, onSnapshot, where, doc, getDoc } from 'firebase/firestore';
-import { Plus, Search, Filter, Eye, Paperclip } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Paperclip, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function TicketList() {
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('Todos');
+    const [searchTerm, setSearchTerm] = useState(localStorage.getItem('ticketSearchTerm') || '');
+    const [statusFilter, setStatusFilter] = useState(localStorage.getItem('ticketStatusFilter') || 'Todos');
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -61,9 +61,24 @@ export default function TicketList() {
         fetchSettings();
     }, []);
 
-    const [typeFilter, setTypeFilter] = useState('Todos');
-    const [marketplaceFilter, setMarketplaceFilter] = useState('Todos');
-    const [responsibleFilter, setResponsibleFilter] = useState('Todos');
+    const [typeFilter, setTypeFilter] = useState(localStorage.getItem('ticketTypeFilter') || 'Todos');
+    const [marketplaceFilter, setMarketplaceFilter] = useState(localStorage.getItem('ticketMarketplaceFilter') || 'Todos');
+    const [responsibleFilter, setResponsibleFilter] = useState(localStorage.getItem('ticketResponsibleFilter') || 'Todos');
+
+    // Persistence Effects
+    useEffect(() => { localStorage.setItem('ticketSearchTerm', searchTerm); }, [searchTerm]);
+    useEffect(() => { localStorage.setItem('ticketStatusFilter', statusFilter); }, [statusFilter]);
+    useEffect(() => { localStorage.setItem('ticketTypeFilter', typeFilter); }, [typeFilter]);
+    useEffect(() => { localStorage.setItem('ticketMarketplaceFilter', marketplaceFilter); }, [marketplaceFilter]);
+    useEffect(() => { localStorage.setItem('ticketResponsibleFilter', responsibleFilter); }, [responsibleFilter]);
+
+    const handleClearFilters = () => {
+        setSearchTerm('');
+        setStatusFilter('Todos');
+        setTypeFilter('Todos');
+        setMarketplaceFilter('Todos');
+        setResponsibleFilter('Todos');
+    };
 
     const filteredTickets = tickets.filter(ticket => {
         const matchesSearch =
@@ -120,11 +135,30 @@ export default function TicketList() {
                             placeholder="Buscar por código, assunto ou responsável..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                         />
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap mt-4 lg:mt-0">
-                        <Filter className="text-gray-400 w-5 h-5 hidden sm:block" />
+                        <div className="flex items-center gap-1 group">
+                            <Filter className="text-gray-400 w-5 h-5 hidden sm:block" />
+                            {(statusFilter !== 'Todos' || typeFilter !== 'Todos' || marketplaceFilter !== 'Todos' || responsibleFilter !== 'Todos') && (
+                                <button
+                                    onClick={handleClearFilters}
+                                    className="text-xs text-red-500 hover:text-red-700 font-medium"
+                                    title="Limpar todos os filtros"
+                                >
+                                    Limpar
+                                </button>
+                            )}
+                        </div>
                         <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
@@ -138,6 +172,7 @@ export default function TicketList() {
                         </select>
 
                         <select
+                            value={typeFilter}
                             onChange={(e) => setTypeFilter(e.target.value)}
                             className="border border-gray-300 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                         >
@@ -148,6 +183,7 @@ export default function TicketList() {
                         </select>
 
                         <select
+                            value={marketplaceFilter}
                             onChange={(e) => setMarketplaceFilter(e.target.value)}
                             className="border border-gray-300 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                         >

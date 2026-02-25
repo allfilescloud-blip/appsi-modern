@@ -565,8 +565,16 @@ const Flex = () => {
                             placeholder="Pesquisar ID, alias ou item..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                            className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                         />
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
@@ -725,14 +733,24 @@ const Flex = () => {
                                 </h3>
 
                                 <div className="flex flex-col gap-3">
-                                    <input
-                                        type="text"
-                                        value={sendIdInput}
-                                        onChange={(e) => setSendIdInput(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && addItem(sendIdInput)}
-                                        placeholder="Digite ou escaneie o ID..."
-                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    />
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={sendIdInput}
+                                            onChange={(e) => setSendIdInput(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && addItem(sendIdInput)}
+                                            placeholder="Digite ou escaneie o ID..."
+                                            className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                        {sendIdInput && (
+                                            <button
+                                                onClick={() => setSendIdInput('')}
+                                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
 
                                     <div className="flex gap-2">
                                         <button
