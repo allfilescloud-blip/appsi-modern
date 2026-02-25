@@ -270,9 +270,9 @@ export default function TicketDetails() {
     };
 
     return (
-        <div className="max-w-6xl mx-auto space-y-6 pb-10 min-h-[calc(100dvh-100px)] lg:h-[calc(100dvh-100px)] flex flex-col relative">
+        <div className="max-w-6xl mx-auto flex flex-col h-full lg:h-[calc(100vh-140px)] gap-4 pb-4">
             {/* Header */}
-            <div className="flex items-center gap-4 mb-2">
+            <div className="flex items-center gap-4 px-1">
                 <button onClick={() => navigate('/chamados')} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                     <ArrowLeft className="w-6 h-6 text-gray-600" />
                 </button>
@@ -287,9 +287,9 @@ export default function TicketDetails() {
                 </div>
             </div>
 
-            <div className="flex flex-col lg:flex-row gap-6 h-full overflow-hidden">
+            <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
                 {/* Main Chat Area */}
-                <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col lg:overflow-hidden">
+                <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col min-h-0 overflow-hidden">
 
                     {/* Description Section */}
                     <div className="p-4 border-b border-gray-100 bg-gray-50/30">
@@ -473,7 +473,7 @@ export default function TicketDetails() {
                 </div>
 
                 {/* Sidebar / Details */}
-                <div className="w-full lg:w-80 space-y-6">
+                <div className="w-full lg:w-80 space-y-6 lg:overflow-y-auto pr-1 custom-scrollbar">
                     {/* Status & Responsible Card */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-6">
                         <div className="space-y-2">
