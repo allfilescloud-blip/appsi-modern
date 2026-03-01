@@ -1,9 +1,10 @@
 import axios from 'axios';
+import { db } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 // Em produção, isso deve ser uma URL para seu backend/proxy seguro
 // Para este MVP, usaremos a chave direta mas via variável de ambiente
 const API_URL = "https://apiv3.ideris.com.br";
-const PRIVATE_KEY = import.meta.env.VITE_IDERIS_PRIVATE_KEY || "4d18596794934f399c0cc00e40ca613504f966f5188d41c888c345a41fe2632bc38691279dac4d5da8be0675beadb70f";
 
 let jwtToken = null;
 
@@ -17,7 +18,18 @@ const api = axios.create({
 
 export const loginIderis = async () => {
     try {
-        const response = await axios.post(`${API_URL}/Login`, `"${PRIVATE_KEY}"`, {
+        let privateKey = import.meta.env.VITE_IDERIS_PRIVATE_KEY || "";
+
+        try {
+            const docSnap = await getDoc(doc(db, "sys_settings", "ideris"));
+            if (docSnap.exists() && docSnap.data().apiKey) {
+                privateKey = docSnap.data().apiKey;
+            }
+        } catch (e) {
+            console.error("Não foi possível buscar a chave via banco de dados. Usando chave padrão.", e);
+        }
+
+        const response = await axios.post(`${API_URL}/Login`, `"${privateKey}"`, {
             headers: {
                 'Content-Type': 'application/json',
                 'accept': '*/*',
