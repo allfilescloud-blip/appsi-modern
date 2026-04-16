@@ -184,24 +184,22 @@
 }
 
 .flex-reports-header {
-    background-color: #f8f9fa;
-    padding: 15px 20px;
     border-bottom: 1px solid #eee;
     display: grid;
-    grid-template-columns: 120px 80px 1fr 100px 150px;
-    font-weight: 600;
-    color: #555;
-    gap: 10px;
+    grid-template-columns: 100px 90px 1fr 110px 150px;
+    padding: 0 20px;
+    align-items: stretch;
+    gap: 0;
 }
 
 .flex-report-item {
     display: grid;
-    grid-template-columns: 120px 80px 1fr 100px 150px;
+    grid-template-columns: 100px 90px 1fr 110px 150px;
     padding: 15px 20px;
     border-bottom: 1px solid #eee;
     align-items: center;
     transition: background-color 0.2s;
-    gap: 10px;
+    gap: 0;
 }
 
 .flex-report-item:hover {

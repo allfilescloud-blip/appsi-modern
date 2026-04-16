@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { searchMultipleSkus, updateStock } from '../../services/ideris';
 import { toast } from 'react-toastify';
-import { Search, Save, Trash2, CheckCircle, X } from 'lucide-react';
+import { Search, Save, Trash2, CheckCircle, X, Package } from 'lucide-react';
+import ConfirmationModal from '../Shared/ConfirmationModal';
 
 export default function Inventory() {
+    const { iderisSettings } = useAuth();
+    const navigate = useNavigate();
+
     const [searchInput, setSearchInput] = useState('');
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -12,6 +18,21 @@ export default function Inventory() {
 
     // Store new stock values: { [sku]: number }
     const [stockUpdates, setStockUpdates] = useState({});
+
+    useEffect(() => {
+        if (iderisSettings && !iderisSettings.enabled) {
+            toast.warning("O Módulo de Integração (Ideris) está desabilitado");
+            navigate('/');
+        }
+    }, [iderisSettings, navigate]);
+
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        variant: 'danger'
+    });
 
     // Load state from local storage on mount
     useEffect(() => {
@@ -67,16 +88,24 @@ export default function Inventory() {
     };
 
     const handleClear = () => {
-        setProducts([]);
-        setSearchInput('');
-        setLastSearch('');
-        setStockUpdates({});
+        setConfirmModal({
+            isOpen: true,
+            title: 'Limpar Lista',
+            message: 'Deseja limpar todos os produtos e resultados da pesquisa atual?',
+            variant: 'danger',
+            onConfirm: () => {
+                setProducts([]);
+                setSearchInput('');
+                setLastSearch('');
+                setStockUpdates({});
 
-        // Clear from localStorage
-        localStorage.removeItem('inventoryLastSearch');
-        localStorage.removeItem('inventoryProducts');
+                // Clear from localStorage
+                localStorage.removeItem('inventoryLastSearch');
+                localStorage.removeItem('inventoryProducts');
 
-        toast.info("Lista limpa.");
+                toast.info("Lista limpa.");
+            }
+        });
     };
 
     const handleStockInputChange = (sku, value) => {
@@ -98,49 +127,60 @@ export default function Inventory() {
             return;
         }
 
-        setUpdating(true);
-        let successCount = 0;
-        let failCount = 0;
+        setConfirmModal({
+            isOpen: true,
+            title: 'Atualizar Estoque',
+            message: `Deseja atualizar o estoque de ${skusToUpdate.length} item(ns)? Esta ação alterará os valores no Ideris.`,
+            variant: 'info',
+            onConfirm: async () => {
+                setUpdating(true);
+                let successCount = 0;
+                let failCount = 0;
 
-        // Iterate and update one by one as per legacy logic
-        for (const sku of skusToUpdate) {
-            const newQty = parseInt(stockUpdates[sku], 10);
-            try {
-                await updateStock(sku, newQty);
+                // Iterate and update one by one as per legacy logic
+                for (const sku of skusToUpdate) {
+                    const newQty = parseInt(stockUpdates[sku], 10);
+                    try {
+                        await updateStock(sku, newQty);
 
-                // Update local state to reflect change immediately
-                setProducts(prev => {
-                    const updatedProducts = prev.map(p =>
-                        p.sku === sku ? { ...p, stockAmount: newQty } : p
-                    );
-                    // Update localStorage with new stock amounts
-                    localStorage.setItem('inventoryProducts', JSON.stringify(updatedProducts));
-                    return updatedProducts;
-                });
+                        // Update local state to reflect change immediately
+                        setProducts(prev => {
+                            const updatedProducts = prev.map(p =>
+                                p.sku === sku ? { ...p, stockAmount: newQty } : p
+                            );
+                            // Update localStorage with new stock amounts
+                            localStorage.setItem('inventoryProducts', JSON.stringify(updatedProducts));
+                            return updatedProducts;
+                        });
 
-                // Remove from pending updates
-                setStockUpdates(prev => {
-                    const next = { ...prev };
-                    delete next[sku];
-                    return next;
-                });
+                        // Remove from pending updates
+                        setStockUpdates(prev => {
+                            const next = { ...prev };
+                            delete next[sku];
+                            return next;
+                        });
 
-                successCount++;
-            } catch (error) {
-                console.error(`Falha ao atualizar SKU ${sku}:`, error);
-                failCount++;
+                        successCount++;
+                    } catch (error) {
+                        console.error(`Falha ao atualizar SKU ${sku}:`, error);
+                        failCount++;
+                    }
+                }
+
+                if (successCount > 0) toast.success(`${successCount} SKU(s) atualizados com sucesso!`);
+                if (failCount > 0) toast.error(`${failCount} falha(s) na atualização.`);
+
+                setUpdating(false);
             }
-        }
-
-        if (successCount > 0) toast.success(`${successCount} SKU(s) atualizados com sucesso!`);
-        if (failCount > 0) toast.error(`${failCount} falha(s) na atualização.`);
-
-        setUpdating(false);
+        });
     };
 
     return (
         <div className="max-w-6xl mx-auto space-y-6">
-            <h1 className="text-2xl font-bold text-gray-800">Gestão de Estoque</h1>
+            <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                <Package className="w-8 h-8 text-blue-600" />
+                Gestão de Estoque
+            </h1>
 
             {/* Search Bar Area */}
             {/* Search Bar Area */}
@@ -206,97 +246,115 @@ export default function Inventory() {
 
             {/* Results Table */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                {products.length === 0 ? (
-                    <div className="p-8 text-center text-gray-500">
-                        Nenhum produto listado.
-                    </div>
-                ) : (
-                    <>
-                        {/* Desktop View (Table) */}
-                        <div className="hidden md:block overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-gray-50 border-b border-gray-200">
-                                    <tr>
-                                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">SKU</th>
-                                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Produto</th>
-                                        <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600">Estoque Atual</th>
-                                        <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600">Atualizar</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {products.map((product) => (
-                                        <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-6 py-4">
-                                                <span className="text-blue-700 font-bold font-mono text-base bg-blue-50 px-2 py-1 rounded border border-blue-100">
-                                                    {product.sku}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="text-gray-800 font-medium" title={product.title || product.nome}>
-                                                    {product.title || product.nome}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-bold text-sm border border-blue-100">
-                                                    {product.stockAmount}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    placeholder="Novo"
-                                                    value={stockUpdates[product.sku] || ''}
-                                                    onChange={(e) => handleStockInputChange(product.sku, e.target.value)}
-                                                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-center transition-all hover:border-blue-400"
-                                                />
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Mobile View (Cards) */}
-                        <div className="md:hidden space-y-4 p-4 min-h-screen bg-transparent">
-                            {products.map((product) => (
-                                <div key={product.id} className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-lg">
-                                    <div className="p-5">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <span className="text-xl font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 font-mono">
+                {/* Desktop View (Table) */}
+                <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full">
+                        <thead className="bg-gray-100 border-b-2 border-slate-200">
+                            <tr>
+                                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600 border-r border-white">SKU</th>
+                                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600 border-r border-white">Produto</th>
+                                <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600 border-r border-white">Estoque Atual</th>
+                                <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600">Atualizar</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {products.length === 0 ? (
+                                <tr>
+                                    <td colSpan="4" className="p-8 text-center text-gray-500">
+                                        Nenhum produto listado.
+                                    </td>
+                                </tr>
+                            ) : (
+                                products.map((product) => (
+                                    <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <span className="text-blue-700 font-bold font-mono text-base bg-blue-50 px-2 py-1 rounded border border-blue-100">
                                                 {product.sku}
                                             </span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className="text-gray-800 font-medium" title={product.title || product.nome}>
+                                                {product.title || product.nome}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-bold text-sm border border-blue-100">
+                                                {product.stockAmount}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                placeholder="Novo"
+                                                value={stockUpdates[product.sku] || ''}
+                                                onChange={(e) => handleStockInputChange(product.sku, e.target.value)}
+                                                className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-center transition-all hover:border-blue-400"
+                                            />
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Mobile View (Cards) */}
+                <div className="md:hidden space-y-4 p-4 min-h-screen bg-transparent">
+                    {products.length === 0 ? (
+                        <div className="p-8 text-center text-gray-500 bg-white rounded-xl shadow-sm border border-gray-200">
+                            Nenhum produto listado.
+                        </div>
+                    ) : (
+                        products.map((product) => (
+                            <div key={product.id} className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-lg">
+                                <div className="p-5">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <span className="text-xl font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 font-mono">
+                                            {product.sku}
+                                        </span>
+                                    </div>
+                                    <h3 className="font-bold text-gray-900 leading-relaxed text-lg mb-4">
+                                        {product.title || product.nome}
+                                    </h3>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 text-center flex flex-col justify-center">
+                                            <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Atual</p>
+                                            <p className="text-2xl font-black text-gray-800">{product.stockAmount}</p>
                                         </div>
-                                        <h3 className="font-bold text-gray-900 leading-relaxed text-lg mb-4">
-                                            {product.title || product.nome}
-                                        </h3>
 
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 text-center flex flex-col justify-center">
-                                                <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Atual</p>
-                                                <p className="text-2xl font-black text-gray-800">{product.stockAmount}</p>
-                                            </div>
-
-                                            <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center flex flex-col justify-center relative">
-                                                <p className="text-xs text-blue-500 uppercase font-bold tracking-wider mb-1">Novo</p>
-                                                <input
-                                                    type="number"
-                                                    inputMode="numeric"
-                                                    pattern="[0-9]*"
-                                                    placeholder="-"
-                                                    value={stockUpdates[product.sku] || ''}
-                                                    onChange={(e) => handleStockInputChange(product.sku, e.target.value)}
-                                                    className="w-full text-center text-2xl font-black text-blue-600 outline-none bg-transparent placeholder-blue-300 z-10"
-                                                />
-                                            </div>
+                                        <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center flex flex-col justify-center relative">
+                                            <p className="text-xs text-blue-500 uppercase font-bold tracking-wider mb-1">Novo</p>
+                                            <input
+                                                type="number"
+                                                inputMode="numeric"
+                                                pattern="[0-9]*"
+                                                placeholder="-"
+                                                value={stockUpdates[product.sku] || ''}
+                                                onChange={(e) => handleStockInputChange(product.sku, e.target.value)}
+                                                className="w-full text-center text-2xl font-black text-blue-600 outline-none bg-transparent placeholder-blue-300 z-10"
+                                            />
                                         </div>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    </>
-                )}
+                            </div>
+                        ))
+                    )}
+                </div>
             </div>
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={() => {
+                    confirmModal.onConfirm();
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                }}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                variant={confirmModal.variant}
+            />
         </div>
     );
 }

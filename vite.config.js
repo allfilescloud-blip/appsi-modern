@@ -8,13 +8,10 @@ export default defineConfig({
         react(),
         VitePWA({
             registerType: 'autoUpdate',
-            devOptions: {
-                enabled: true
-            },
             includeAssets: ['pwa-icon.svg'],
             workbox: {
                 globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-                navigateFallback: '/appsi-modern/index.html',
+                navigateFallback: 'index.html',
                 navigateFallbackAllowlist: [/^(?!\/__).*/]
             },
             manifest: {
@@ -41,5 +38,5 @@ export default defineConfig({
             }
         })
     ],
-    base: '/appsi-modern/',
+    base: process.env.NODE_ENV === 'production' ? '/appsi-modern/' : '/',
 })

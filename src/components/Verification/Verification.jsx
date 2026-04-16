@@ -3,14 +3,17 @@ import { getOrder } from '../../services/ideris';
 import { toast } from 'react-toastify';
 import { Search, CheckCircle, XCircle, Package, Camera, Printer, Trash2, Globe, WifiOff, ScanBarcode, StopCircle, RefreshCw, X } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { useAuth } from '../../context/AuthContext';
+import ConfirmationModal from '../Shared/ConfirmationModal';
 
 export default function Verification() {
+    const { iderisSettings } = useAuth();
     const [inputCode, setInputCode] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // localMode = false => Ideris API (Default)
+    // localMode = false => Ideris API (Default se habilitado)
     // localMode = true => Modo Local
-    const [localMode, setLocalMode] = useState(false);
+    const [localMode, setLocalMode] = useState(!iderisSettings?.enabled);
     const [verifiedList, setVerifiedList] = useState([]);
     const [lastResult, setLastResult] = useState(null);
 
@@ -23,10 +26,25 @@ export default function Verification() {
     const inputRef = useRef(null);
     const isProcessingRef = useRef(false);
 
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        variant: 'danger'
+    });
+
     const verifiedListRef = useRef(verifiedList);
     useEffect(() => {
         verifiedListRef.current = verifiedList;
     }, [verifiedList]);
+
+    useEffect(() => {
+        // Se a integração global for removida enquanto o usuário usa a tela, força modo local
+        if (iderisSettings && !iderisSettings.enabled) {
+            setLocalMode(true);
+        }
+    }, [iderisSettings]);
 
     useEffect(() => {
         // Focus input unless scanner is active (to avoid keyboard popping up on mobile while scanning)
@@ -79,7 +97,18 @@ export default function Verification() {
     const handleSearch = async (e, codeOverride = null) => {
         if (e) e.preventDefault();
         const code = codeOverride || inputCode.trim();
-        if (!code) return 'empty'; // Return status
+
+        const finalizeSearch = () => {
+            setInputCode('');
+            if (!isScannerActive) {
+                setTimeout(() => inputRef.current?.focus(), 100);
+            }
+        };
+
+        if (!code) {
+            finalizeSearch();
+            return 'empty';
+        }
 
         // 1. Check for Duplicates (Local Check)
         const isDuplicate = verifiedListRef.current.some(item => item.code === code);
@@ -95,8 +124,8 @@ export default function Verification() {
             setVerifiedList(prev => [result, ...prev]);
             toast.warn(`Código ${code} já foi verificado!`);
             playSound('error');
-            setInputCode('');
-            return 'duplicate'; // Return status
+            finalizeSearch();
+            return 'duplicate';
         }
 
         // 2. Local Mode (No API)
@@ -112,8 +141,8 @@ export default function Verification() {
             setVerifiedList(prev => [result, ...prev]);
             toast.success(`Código ${code} conferido.`);
             playSound('success');
-            setInputCode('');
-            return 'success'; // Return status
+            finalizeSearch();
+            return 'success';
         }
 
         // 3. API Verification
@@ -138,11 +167,11 @@ export default function Verification() {
             if (isCancelled) {
                 toast.error(`Pedido ${code}: ${statusDesc}`);
                 playSound('error');
-                return 'error'; // Return status
+                return 'error';
             } else {
                 toast.success(`Pedido ${code} verificado!`);
                 playSound('success');
-                return 'success'; // Return status
+                return 'success';
             }
 
         } catch (error) {
@@ -157,34 +186,46 @@ export default function Verification() {
             setVerifiedList(prev => [result, ...prev]);
             toast.error(error.message);
             playSound('error');
-            return 'error'; // Return status
+            return 'error';
         } finally {
             setLoading(false);
-            setInputCode('');
-            // Return cursor to field if not using camera scanner
-            if (!isScannerActive) {
-                setTimeout(() => {
-                    inputRef.current?.focus();
-                }, 100);
-            }
+            finalizeSearch();
         }
     };
 
     const handleRemoveItem = (indexToRemove) => {
-        if (window.confirm("Remover este item da lista?")) {
-            setVerifiedList(prev => prev.filter((_, idx) => idx !== indexToRemove));
-            toast.info("Item removido.");
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: 'Remover Item',
+            message: 'Deseja remover este item da lista de verificação?',
+            variant: 'danger',
+            onConfirm: () => {
+                setVerifiedList(prev => {
+                    const newList = prev.filter((_, idx) => idx !== indexToRemove);
+                    if (newList.length === 0) {
+                        setLastResult(null);
+                    }
+                    return newList;
+                });
+                toast.info("Item removido.");
+            }
+        });
     };
 
     const handleClear = () => {
-        if (window.confirm("Tem certeza que deseja limpar todo o histórico de verificação?")) {
-            setVerifiedList([]);
-            setLastResult(null);
-            setInputCode('');
-            toast.info("Histórico limpo.");
-            inputRef.current?.focus();
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: 'Limpar Histórico',
+            message: 'Tem certeza que deseja limpar todo o histórico de verificação? Esta ação não pode ser desfeita.',
+            variant: 'danger',
+            onConfirm: () => {
+                setVerifiedList([]);
+                setLastResult(null);
+                setInputCode('');
+                toast.info("Histórico limpo.");
+                setTimeout(() => inputRef.current?.focus(), 100);
+            }
+        });
     };
 
     const startScanner = async () => {
@@ -262,16 +303,21 @@ export default function Verification() {
     };
 
     const stopScanner = () => {
+        const refocus = () => {
+            setIsScannerActive(false);
+            setTimeout(() => inputRef.current?.focus(), 100);
+        };
+
         if (scannerRef.current) {
             scannerRef.current.stop().then(() => {
                 scannerRef.current = null;
-                setIsScannerActive(false);
+                refocus();
             }).catch(err => {
                 console.error("Erro ao parar scanner:", err);
-                setIsScannerActive(false);
+                refocus();
             });
         } else {
-            setIsScannerActive(false);
+            refocus();
         }
     };
 
@@ -313,32 +359,34 @@ export default function Verification() {
                         Verificação
                     </h1>
 
-                    <div className="flex items-center gap-4 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
-                        <div className="flex items-center gap-2">
-                            <label className="relative inline-flex items-center cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={!localMode} // Checked = API Mode (localMode false)
-                                    onChange={(e) => setLocalMode(!e.target.checked)}
-                                    className="sr-only peer"
-                                />
-                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                <span className="ml-3 text-sm font-bold text-gray-700 flex items-center gap-2">
-                                    {!localMode ? (
-                                        <>
-                                            <Globe className="w-4 h-4 text-blue-600" />
-                                            Ideris API
-                                        </>
-                                    ) : (
-                                        <>
-                                            <WifiOff className="w-4 h-4 text-gray-500" />
-                                            Modo Local
-                                        </>
-                                    )}
-                                </span>
-                            </label>
+                    {iderisSettings?.enabled && (
+                        <div className="flex items-center gap-4 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
+                            <div className="flex items-center gap-2">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={!localMode} // Checked = API Mode (localMode false)
+                                        onChange={(e) => setLocalMode(!e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    <span className="ml-3 text-sm font-bold text-gray-700 flex items-center gap-2">
+                                        {!localMode ? (
+                                            <>
+                                                <Globe className="w-4 h-4 text-blue-600" />
+                                                Ideris API
+                                            </>
+                                        ) : (
+                                            <>
+                                                <WifiOff className="w-4 h-4 text-gray-500" />
+                                                Modo Local
+                                            </>
+                                        )}
+                                    </span>
+                                </label>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 {/* Input & Call to Action Area */}
@@ -463,14 +511,14 @@ export default function Verification() {
                         {/* Desktop Table */}
                         <div className="hidden md:block overflow-x-auto">
                             <table className="w-full border-separate border-spacing-0">
-                                <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold">
+                                <thead className="bg-gray-100 border-b-2 border-slate-200 text-xs uppercase text-gray-600 font-bold">
                                     <tr>
-                                        <th className="px-6 py-3 text-left w-20">#</th>
-                                        <th className="px-6 py-3 text-left">Hora</th>
-                                        <th className="px-6 py-3 text-left">Código</th>
-                                        <th className="px-6 py-3 text-left">Cliente</th>
-                                        <th className="px-6 py-3 text-left">Status</th>
-                                        <th className="px-6 py-3 text-right">Ações</th>
+                                        <th className="px-6 py-4 text-left w-20 border-r border-white">#</th>
+                                        <th className="px-6 py-4 text-left border-r border-white">Hora</th>
+                                        <th className="px-6 py-4 text-left border-r border-white">Código</th>
+                                        <th className="px-6 py-4 text-left border-r border-white">Cliente</th>
+                                        <th className="px-6 py-4 text-left border-r border-white">Status</th>
+                                        <th className="px-6 py-4 text-right">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -622,6 +670,18 @@ export default function Verification() {
                     <p className="text-sm uppercase font-bold tracking-wider">Assinatura do Responsável</p>
                 </div>
             </div>
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={() => {
+                    confirmModal.onConfirm();
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                }}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                variant={confirmModal.variant}
+            />
         </div>
     );
 }

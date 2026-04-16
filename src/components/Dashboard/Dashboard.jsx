@@ -8,7 +8,8 @@ import {
     CheckCircle,
     AlertCircle,
     TrendingUp,
-    TrendingDown
+    TrendingDown,
+    LayoutDashboard
 } from 'lucide-react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { getOpenOrdersSummary } from '../../services/ideris';
@@ -27,6 +28,7 @@ import {
 } from 'chart.js';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useAuth } from '../../context/AuthContext';
 
 ChartJS.register(
     CategoryScale,
@@ -39,6 +41,7 @@ ChartJS.register(
 );
 
 export default function Dashboard() {
+    const { iderisSettings } = useAuth();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         total: 0,
@@ -170,6 +173,10 @@ export default function Dashboard() {
 
 
         async function fetchIderisStats() {
+            if (!iderisSettings?.enabled) {
+                setIderisLoading(false);
+                return;
+            }
             try {
                 const data = await getOpenOrdersSummary();
                 setIderisStats(data);
@@ -182,7 +189,7 @@ export default function Dashboard() {
 
         fetchStats();
         fetchIderisStats();
-    }, []);
+    }, [iderisSettings]);
 
     if (loading) {
         return (
@@ -195,7 +202,10 @@ export default function Dashboard() {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-gray-800">Painel de Controle</h1>
+                <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    <LayoutDashboard className="w-8 h-8 text-blue-600" />
+                    Painel de Controle
+                </h1>
                 <div className="text-sm text-gray-500">
                     Atualizado em: {new Date().toLocaleTimeString('pt-BR')}
                 </div>
@@ -203,104 +213,117 @@ export default function Dashboard() {
 
             {/* Cards de Métricas */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center justify-between">
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center justify-between relative overflow-hidden group">
                     <div>
-                        <p className="text-sm font-medium text-gray-500 mb-1">Total de Chamados (Últimos 30 dias)</p>
+                        <p className="text-sm font-medium text-gray-500 mb-1">Total de Chamados</p>
                         <h3 className="text-2xl font-bold text-gray-800">{stats.total}</h3>
+                        <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1 uppercase tracking-wider">
+                            <Clock className="w-3 h-3" /> Últimos 30 dias
+                        </p>
                     </div>
-                    <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
+                    <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110">
                         <Users className="w-6 h-6 text-blue-600" />
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center justify-between">
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center justify-between relative overflow-hidden group">
                     <div>
                         <p className="text-sm font-medium text-gray-500 mb-1">Em Aberto</p>
                         <h3 className="text-2xl font-bold text-gray-800">{stats.abertos}</h3>
-                        <span className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                            <AlertCircle className="w-3 h-3" /> Requer atenção
-                        </span>
+                        {stats.abertos >= 10 && (
+                            <span className="text-[10px] text-red-500 font-bold flex items-center gap-1 mt-2 uppercase tracking-wider animate-pulse">
+                                <AlertCircle className="w-3 h-3" /> Requer atenção
+                            </span>
+                        )}
+                        {stats.abertos < 10 && (
+                            <p className="text-[10px] text-gray-400 mt-2 uppercase tracking-wider">Status: Estável</p>
+                        )}
                     </div>
-                    <div className="w-12 h-12 bg-orange-50 rounded-lg flex items-center justify-center">
+                    <div className="w-12 h-12 bg-orange-50 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110">
                         <Clock className="w-6 h-6 text-orange-600" />
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center justify-between">
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center justify-between relative overflow-hidden group">
                     <div>
-                        <p className="text-sm font-medium text-gray-500 mb-1">Finalizados (Últimos 30 dias)</p>
+                        <p className="text-sm font-medium text-gray-500 mb-1">Finalizados</p>
                         <h3 className="text-2xl font-bold text-gray-800">{stats.fechados}</h3>
+                        <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1 uppercase tracking-wider">
+                            <CheckCircle className="w-3 h-3" /> Últimos 30 dias
+                        </p>
                     </div>
-                    <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
+                    <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110">
                         <CheckCircle className="w-6 h-6 text-green-600" />
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center justify-between">
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center justify-between relative overflow-hidden group">
                     <div>
                         <p className="text-sm font-medium text-gray-500 mb-1">Novos Hoje</p>
                         <h3 className="text-2xl font-bold text-gray-800">{stats.hoje}</h3>
-                        <span className="text-xs text-green-500 flex items-center gap-1 mt-1">
+                        <span className="text-[10px] text-green-500 font-bold flex items-center gap-1 mt-2 uppercase tracking-wider">
                             <TrendingUp className="w-3 h-3" /> +{stats.hoje} novos
                         </span>
                     </div>
-                    <div className="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center">
+                    <div className="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110">
                         <Calendar className="w-6 h-6 text-purple-600" />
                     </div>
                 </div>
             </div>
 
             {/* Pedidos Ideris */}
-            <div className="space-y-4">
-                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                    <ShoppingCart className="w-6 h-6 text-blue-600" />
-                    Resumo de Pedidos (Ideris)
-                </h3>
+            {iderisSettings?.enabled && (
+                <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                        <ShoppingCart className="w-6 h-6 text-blue-600" />
+                        Resumo de Pedidos (Ideris)
+                    </h3>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Card Total Ideris */}
-                    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center justify-between col-span-1">
-                        <div>
-                            <p className="text-sm font-medium text-gray-500 mb-1">Total em Aberto no Ideris</p>
-                            {iderisLoading ? (
-                                <div className="h-8 w-16 bg-gray-100 animate-pulse rounded"></div>
-                            ) : (
-                                <h3 className="text-3xl font-bold text-gray-800">{iderisStats?.total || 0}</h3>
-                            )}
-                            <span className="text-xs text-blue-500 flex items-center gap-1 mt-1">
-                                <AlertCircle className="w-3 h-3" /> Status: Aberto
-                            </span>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Card Total Ideris */}
+                        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center justify-between col-span-1">
+                            <div>
+                                <p className="text-sm font-medium text-gray-500 mb-1">Total em Aberto no Ideris</p>
+                                {iderisLoading ? (
+                                    <div className="h-8 w-16 bg-gray-100 animate-pulse rounded"></div>
+                                ) : (
+                                    <h3 className="text-3xl font-bold text-gray-800">{iderisStats?.total || 0}</h3>
+                                )}
+                                <span className="text-xs text-blue-500 flex items-center gap-1 mt-1">
+                                    <AlertCircle className="w-3 h-3" /> Status: Aberto
+                                </span>
+                            </div>
+                            <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
+                                <ShoppingCart className="w-6 h-6 text-blue-600" />
+                            </div>
                         </div>
-                        <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
-                            <ShoppingCart className="w-6 h-6 text-blue-600" />
-                        </div>
-                    </div>
 
-                    {/* Breakdown por Conta */}
-                    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 col-span-1 lg:col-span-2">
-                        <p className="text-sm font-medium text-gray-500 mb-4">Quantidade por Conta de Marketplace</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {iderisLoading ? (
-                                [1, 2, 3, 4].map(i => (
-                                    <div key={i} className="h-14 bg-gray-50 animate-pulse rounded-lg"></div>
-                                ))
-                            ) : (
-                                iderisStats?.byAccount.map((account, index) => (
-                                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
-                                        <p className="font-semibold text-gray-700 truncate mr-2" title={account.name}>{account.name}</p>
-                                        <div className="px-2 py-1 bg-white rounded text-sm font-bold text-blue-600 border border-gray-200">
-                                            {account.count}
+                        {/* Breakdown por Conta */}
+                        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 col-span-1 lg:col-span-2">
+                            <p className="text-sm font-medium text-gray-500 mb-4">Quantidade por Conta de Marketplace</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {iderisLoading ? (
+                                    [1, 2, 3, 4].map(i => (
+                                        <div key={i} className="h-14 bg-gray-50 animate-pulse rounded-lg"></div>
+                                    ))
+                                ) : (
+                                    iderisStats?.byAccount.map((account, index) => (
+                                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                            <p className="font-semibold text-gray-700 truncate mr-2" title={account.name}>{account.name}</p>
+                                            <div className="px-2 py-1 bg-white rounded text-sm font-bold text-blue-600 border border-gray-200">
+                                                {account.count}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))
-                            )}
-                            {!iderisLoading && (!iderisStats || iderisStats.byAccount.length === 0) && (
-                                <p className="text-gray-500 text-sm italic">Nenhum pedido em aberto encontrado.</p>
-                            )}
+                                    ))
+                                )}
+                                {!iderisLoading && (!iderisStats || iderisStats.byAccount.length === 0) && (
+                                    <p className="text-gray-500 text-sm italic">Nenhum pedido em aberto encontrado.</p>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* Chamados por Responsável (Novidade) */}
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">

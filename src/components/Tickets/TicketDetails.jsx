@@ -4,7 +4,19 @@ import { db, storage, auth } from '../../services/firebase';
 import { doc, getDoc, updateDoc, arrayUnion, collection, addDoc, getDocs, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'react-toastify';
-import { ArrowLeft, Send, Paperclip, User, Clock, CheckCircle, AlertCircle, Lock, FileText, X, Eye, Download } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, User, Clock, CheckCircle, AlertCircle, Lock, FileText, X, Eye, Download, Calendar } from 'lucide-react';
+import ConfirmationModal from '../Shared/ConfirmationModal';
+
+// Helper to format YYYY-MM-DD date without timezone shift
+const formatDate = (dateStr) => {
+    if (!dateStr) return "-";
+    try {
+        const [year, month, day] = dateStr.split('-');
+        return `${day}/${month}/${year}`;
+    } catch (e) {
+        return dateStr;
+    }
+};
 
 export default function TicketDetails() {
     const { id } = useParams();
@@ -12,6 +24,7 @@ export default function TicketDetails() {
     const [ticket, setTicket] = useState(null);
     const [loading, setLoading] = useState(true);
     const [users, setUsers] = useState([]);
+    const [ticketTypes, setTicketTypes] = useState([]);
 
     // Chat state
     const [newMessage, setNewMessage] = useState('');
@@ -27,8 +40,36 @@ export default function TicketDetails() {
 
     // Image Preview State
     const [previewImage, setPreviewImage] = useState(null);
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        variant: 'danger'
+    });
 
     useEffect(() => {
+        // Load Ticket Types
+        const fetchSettings = async () => {
+            try {
+                const docRef = doc(db, 'sys_settings', 'general');
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setTicketTypes(data.ticketTypes || []);
+                } else {
+                    setTicketTypes([
+                        'Devolução', 'Reembolso', 'Fraude', 'Contatar MarketPlace', 'Contatar Cliente',
+                        'Interno', 'Defeito', 'Prejuízo', 'Atraso na entrega', 'Produto errado',
+                        'Faltou item', 'Dúvida técnica', 'Cancelamento'
+                    ]);
+                }
+            } catch (error) {
+                console.error("Error fetching settings:", error);
+            }
+        };
+        fetchSettings();
+
         // Load Users for Dropdown
         const loadUsers = async () => {
             try {
@@ -100,68 +141,80 @@ export default function TicketDetails() {
 
     const handleResponsavelChange = async (e) => {
         const newResponsavelId = e.target.value;
-        const selectedUser = users.find(u => u.nome === newResponsavelId); // Value is name in legacy, or ID? Legacy seems to store Name. Let's assume Name for consistency with legacy app.js code viewed essentially. 
-        // Actually legacy app.js used `userData.nome`.
+        const selectedUser = users.find(u => u.nome === newResponsavelId);
 
         if (!selectedUser) return;
         const newResponsavelName = selectedUser.nome;
 
-        if (window.confirm(`Confirma a atribuição deste chamado para ${newResponsavelName}? Esta ação não poderá ser desfeita.`)) {
-            try {
-                // Atomic Update: Change Responsible + Log Interaction
-                const systemMsg = {
-                    autor: 'Sistema',
-                    mensagem: `Responsável alterado para ${newResponsavelName} por ${getCurrentUserName()}`,
-                    data: new Date().toISOString()
-                };
+        setConfirmModal({
+            isOpen: true,
+            title: 'Atribuir Responsável?',
+            message: `Confirma a atribuição deste chamado para ${newResponsavelName}? Esta ação não poderá ser desfeita.`,
+            variant: 'info',
+            onConfirm: async () => {
+                try {
+                    const systemMsg = {
+                        autor: 'Sistema',
+                        mensagem: `Responsável alterado para ${newResponsavelName} por ${getCurrentUserName()}`,
+                        data: new Date().toISOString()
+                    };
 
-                await updateDoc(doc(db, 'chamados', id), {
-                    responsavel: newResponsavelName,
-                    responsavelAlterado: true,
-                    interacoes: arrayUnion(systemMsg)
-                });
+                    await updateDoc(doc(db, 'chamados', id), {
+                        responsavel: newResponsavelName,
+                        responsavelAlterado: true,
+                        dataAtualizacao: new Date().toISOString(),
+                        interacoes: arrayUnion(systemMsg)
+                    });
 
-                // Create Notification
-                await addDoc(collection(db, 'notificacoes'), {
-                    para: newResponsavelName, // Or ID if we have it better. Legacy likely matched by Name.
-                    mensagem: `Você foi atribuído ao chamado ${ticket.codigo}`,
-                    lido: false,
-                    data: new Date().toISOString(),
-                    link: `/chamados/${id}`
-                });
+                    await addDoc(collection(db, 'notificacoes'), {
+                        para: newResponsavelName,
+                        mensagem: `Você foi atribuído ao chamado ${ticket.codigo}`,
+                        lido: false,
+                        data: new Date().toISOString(),
+                        link: `/chamados/${id}`
+                    });
 
-                toast.success(`Responsável atribuído: ${newResponsavelName}`);
-            } catch (error) {
-                console.error("Error updating responsible:", error);
-                toast.error("Erro ao atribuir responsável.");
+                    toast.success(`Responsável atribuído: ${newResponsavelName}`);
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                } catch (error) {
+                    console.error("Error updating responsible:", error);
+                    toast.error("Erro ao atribuir responsável.");
+                }
             }
-        }
+        });
     };
 
     const handleStatusChange = async (e) => {
         const newStatus = e.target.value;
 
-        if (window.confirm(`Confirma a alteração de status para "${newStatus}"? Esta ação não poderá ser desfeita.`)) {
-            try {
-                // Atomic Update: Change Status + Log Interaction
-                const systemMsg = {
-                    autor: 'Sistema',
-                    mensagem: `Status alterado para ${newStatus} por ${getCurrentUserName()}`,
-                    data: new Date().toISOString()
-                };
+        setConfirmModal({
+            isOpen: true,
+            title: 'Alterar Status?',
+            message: `Confirma a alteração de status para "${newStatus}"? Esta ação não poderá ser desfeita.`,
+            variant: 'warning',
+            onConfirm: async () => {
+                try {
+                    const systemMsg = {
+                        autor: 'Sistema',
+                        mensagem: `Status alterado para ${newStatus} por ${getCurrentUserName()}`,
+                        data: new Date().toISOString()
+                    };
 
-                await updateDoc(doc(db, 'chamados', id), {
-                    status: newStatus,
-                    statusAlterado: true,
-                    interacoes: arrayUnion(systemMsg)
-                });
+                    await updateDoc(doc(db, 'chamados', id), {
+                        status: newStatus,
+                        statusAlterado: true,
+                        dataAtualizacao: new Date().toISOString(),
+                        interacoes: arrayUnion(systemMsg)
+                    });
 
-                toast.success(`Status alterado para: ${newStatus}`);
-            } catch (error) {
-                console.error("Error updating status:", error);
-                toast.error("Erro ao alterar status.");
+                    toast.success(`Status alterado para: ${newStatus}`);
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                } catch (error) {
+                    console.error("Error updating status:", error);
+                    toast.error("Erro ao alterar status.");
+                }
             }
-        }
+        });
     };
 
     const handleFileUpload = (e) => {
@@ -203,6 +256,7 @@ export default function TicketDetails() {
 
             await updateDoc(doc(db, 'chamados', id), {
                 interacoes: arrayUnion(interaction),
+                dataAtualizacao: new Date().toISOString(),
                 // Auto-update status to 'Pendente' if it was 'Aberto'
                 ...(ticket.status === 'Aberto' ? { status: 'Pendente' } : {})
             });
@@ -270,7 +324,7 @@ export default function TicketDetails() {
     };
 
     return (
-        <div className="max-w-6xl mx-auto flex flex-col h-full lg:h-[calc(100vh-140px)] gap-4 pb-4">
+        <div className="max-w-6xl mx-auto flex flex-col gap-4 pb-4">
             {/* Header */}
             <div className="flex items-center gap-4 px-1">
                 <button onClick={() => navigate('/chamados')} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
@@ -307,7 +361,7 @@ export default function TicketDetails() {
 
 
 
-                    <div className="flex-1 lg:overflow-y-auto p-4 space-y-4 bg-gray-50/50">
+                    <div className="flex-1 p-4 space-y-4 bg-gray-50/50">
                         {ticket.interacoes && ticket.interacoes.map((msg, idx) => {
                             const currentUserName = getCurrentUserName();
                             const isMe = msg.autor === currentUserName || msg.autor === auth.currentUser?.email;
@@ -401,44 +455,62 @@ export default function TicketDetails() {
                                     if (ticket.status === 'Fechado') {
                                         if (ticket.jaFoiRevisado) return;
 
-                                        if (window.confirm("Deseja reabrir este chamado para revisão?")) {
-                                            try {
-                                                const systemMsg = {
-                                                    autor: 'Sistema',
-                                                    mensagem: `Chamado reaberto para revisão por ${getCurrentUserName()}`,
-                                                    data: new Date().toISOString()
-                                                };
+                                        setConfirmModal({
+                                            isOpen: true,
+                                            title: 'Reabrir Chamado?',
+                                            message: 'Deseja reabrir este chamado para revisão?',
+                                            variant: 'warning',
+                                            confirmText: 'Sim, Reabrir',
+                                            onConfirm: async () => {
+                                                try {
+                                                    const systemMsg = {
+                                                        autor: 'Sistema',
+                                                        mensagem: `Chamado reaberto para revisão por ${getCurrentUserName()}`,
+                                                        data: new Date().toISOString()
+                                                    };
 
-                                                await updateDoc(doc(db, 'chamados', id), {
-                                                    status: 'Revisão',
-                                                    jaFoiRevisado: true,
-                                                    interacoes: arrayUnion(systemMsg)
-                                                });
-                                                toast.success("Chamado em revisão.");
-                                            } catch (e) {
-                                                console.error(e);
-                                                toast.error("Erro ao alterar status.");
+                                                    await updateDoc(doc(db, 'chamados', id), {
+                                                        status: 'Revisão',
+                                                        jaFoiRevisado: true,
+                                                        dataAtualizacao: new Date().toISOString(),
+                                                        interacoes: arrayUnion(systemMsg)
+                                                    });
+                                                    toast.success("Chamado em revisão.");
+                                                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                                } catch (e) {
+                                                    console.error(e);
+                                                    toast.error("Erro ao alterar status.");
+                                                }
                                             }
-                                        }
+                                        });
                                     } else {
-                                        if (window.confirm("Deseja finalizar este chamado?")) {
-                                            try {
-                                                const systemMsg = {
-                                                    autor: 'Sistema',
-                                                    mensagem: `Chamado finalizado por ${getCurrentUserName()}`,
-                                                    data: new Date().toISOString()
-                                                };
+                                        setConfirmModal({
+                                            isOpen: true,
+                                            title: 'Finalizar Chamado?',
+                                            message: 'Deseja finalizar este chamado?',
+                                            variant: 'info',
+                                            confirmText: 'Sim, Finalizar',
+                                            onConfirm: async () => {
+                                                try {
+                                                    const systemMsg = {
+                                                        autor: 'Sistema',
+                                                        mensagem: `Chamado finalizado por ${getCurrentUserName()}`,
+                                                        data: new Date().toISOString()
+                                                    };
 
-                                                await updateDoc(doc(db, 'chamados', id), {
-                                                    status: 'Fechado',
-                                                    interacoes: arrayUnion(systemMsg)
-                                                });
-                                                toast.success("Chamado finalizado!");
-                                            } catch (e) {
-                                                console.error(e);
-                                                toast.error("Erro ao finalizar.");
+                                                    await updateDoc(doc(db, 'chamados', id), {
+                                                        status: 'Fechado',
+                                                        dataAtualizacao: new Date().toISOString(),
+                                                        interacoes: arrayUnion(systemMsg)
+                                                    });
+                                                    toast.success("Chamado finalizado!");
+                                                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                                } catch (e) {
+                                                    console.error(e);
+                                                    toast.error("Erro ao finalizar.");
+                                                }
                                             }
-                                        }
+                                        });
                                     }
                                 }}
                                 disabled={ticket.status === 'Fechado' && ticket.jaFoiRevisado}
@@ -473,7 +545,7 @@ export default function TicketDetails() {
                 </div>
 
                 {/* Sidebar / Details */}
-                <div className="w-full lg:w-80 space-y-6 lg:overflow-y-auto pr-1 custom-scrollbar">
+                <div className="w-full lg:w-80 space-y-6 pr-1 custom-scrollbar">
                     {/* Status & Responsible Card */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-6">
                         <div className="space-y-2">
@@ -485,44 +557,42 @@ export default function TicketDetails() {
                                     value={ticket.tipo || ''}
                                     onChange={async (e) => {
                                         const newType = e.target.value;
-                                        if (window.confirm(`Deseja alterar o tipo para "${newType}"?`)) {
-                                            try {
-                                                // Atomic Update: Change Type + Log Interaction
-                                                const systemMsg = {
-                                                    autor: 'Sistema',
-                                                    mensagem: `Tipo alterado para ${newType} por ${getCurrentUserName()}`,
-                                                    data: new Date().toISOString()
-                                                };
+                                        setConfirmModal({
+                                            isOpen: true,
+                                            title: 'Alterar Tipo?',
+                                            message: `Deseja alterar o tipo para "${newType}"?`,
+                                            variant: 'warning',
+                                            onConfirm: async () => {
+                                                try {
+                                                    const systemMsg = {
+                                                        autor: 'Sistema',
+                                                        mensagem: `Tipo alterado para ${newType} por ${getCurrentUserName()}`,
+                                                        data: new Date().toISOString()
+                                                    };
 
-                                                await updateDoc(doc(db, 'chamados', id), {
-                                                    tipo: newType,
-                                                    tipoAlterado: true,
-                                                    interacoes: arrayUnion(systemMsg)
-                                                });
+                                                    await updateDoc(doc(db, 'chamados', id), {
+                                                        tipo: newType,
+                                                        tipoAlterado: true,
+                                                        dataAtualizacao: new Date().toISOString(),
+                                                        interacoes: arrayUnion(systemMsg)
+                                                    });
 
-                                                toast.success(`Tipo alterado para: ${newType}`);
-                                            } catch (error) {
-                                                console.error("Error updating type:", error);
-                                                toast.error("Erro ao alterar tipo.");
+                                                    toast.success(`Tipo alterado para: ${newType}`);
+                                                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                                } catch (error) {
+                                                    console.error("Error updating type:", error);
+                                                    toast.error("Erro ao alterar tipo.");
+                                                }
                                             }
-                                        }
+                                        });
                                     }}
                                     disabled={isTypeLocked}
                                     className={`w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg appearance-none text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-medium text-base ${isTypeLocked ? 'opacity-60 cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:border-blue-300'}`}
                                 >
-                                    <option value="Devolucao">Devolução</option>
-                                    <option value="Reembolso">Reembolso</option>
-                                    <option value="Fraude">Fraude</option>
-                                    <option value="Contatar MarketPlace">Contatar MarketPlace</option>
-                                    <option value="Contatar Cliente">Contatar Cliente</option>
-                                    <option value="Interno">Interno</option>
-                                    <option value="Defeito">Defeito</option>
-                                    <option value="Prejuizo">Prejuízo</option>
-                                    <option value="Atraso na entrega">Atraso na entrega</option>
-                                    <option value="Produto errado">Produto errado</option>
-                                    <option value="Faltou item">Faltou item</option>
-                                    <option value="Duvida tecnica">Dúvida técnica</option>
-                                    <option value="Cancelamento">Cancelamento</option>
+                                    <option value="" disabled>Selecionar...</option>
+                                    {ticketTypes.map(tipo => (
+                                        <option key={tipo} value={tipo}>{tipo}</option>
+                                    ))}
                                 </select>
                                 {isTypeLocked && (
                                     <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -562,6 +632,38 @@ export default function TicketDetails() {
                                 )}
                             </div>
                             {isResponsableLocked && <p className="text-xs text-orange-500 flex items-center gap-1"><Lock className="w-3 h-3" /> Alteração única permitida.</p>}
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
+                                <Calendar className="w-4 h-4" /> Data de Retorno
+                            </label>
+                            <input
+                                type="date"
+                                value={ticket.dataRetorno || ''}
+                                onChange={async (e) => {
+                                    const newDate = e.target.value;
+                                    try {
+                                        const systemMsg = {
+                                            autor: 'Sistema',
+                                            mensagem: `Data de retorno alterada para ${formatDate(newDate)} por ${getCurrentUserName()}`,
+                                            data: new Date().toISOString()
+                                        };
+
+                                        await updateDoc(doc(db, 'chamados', id), {
+                                            dataRetorno: newDate,
+                                            dataAtualizacao: new Date().toISOString(),
+                                            interacoes: arrayUnion(systemMsg)
+                                        });
+
+                                        toast.success("Data de retorno atualizada!");
+                                    } catch (error) {
+                                        console.error("Error updating date:", error);
+                                        toast.error("Erro ao alterar data de retorno.");
+                                    }
+                                }}
+                                className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-medium"
+                            />
                         </div>
 
 
@@ -616,6 +718,16 @@ export default function TicketDetails() {
                 </div>
             )
             }
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                variant={confirmModal.variant}
+                confirmText={confirmModal.confirmText}
+            />
         </div >
     );
 }

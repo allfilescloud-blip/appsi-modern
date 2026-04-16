@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 
 export default function Layout({ children }) {
-    const { userData, logout } = useAuth();
+    const { userData, iderisSettings, logout } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -73,16 +73,27 @@ export default function Layout({ children }) {
         return () => unsubscribe();
     }, [userData]);
 
-    const menuItems = [
+    const baseMenuItems = [
         { icon: LayoutDashboard, label: 'Painel', path: '/' },
         { icon: Ticket, label: 'Chamados', path: '/chamados' },
-        { icon: Columns, label: 'Kanban', path: '/kanban' },
-        { icon: Package, label: 'Estoque', path: '/estoque' },
-        { icon: CheckSquare, label: 'Verificação', path: '/verificacao' },
-        { icon: LifeBuoy, label: 'Suporte', path: '/suporte' },
-        { icon: ScanBarcode, label: 'Flex', path: '/flex' },
+        { icon: Columns, label: 'Kanban', path: '/kanban', permissionKey: 'kanban' },
+        { icon: Package, label: 'Estoque', path: '/estoque', permissionKey: 'estoque' },
+        { icon: CheckSquare, label: 'Verificação', path: '/verificacao', permissionKey: 'verificacao' },
+        { icon: LifeBuoy, label: 'Suporte', path: '/suporte', permissionKey: 'suporte' },
+        { icon: ScanBarcode, label: 'Flex', path: '/flex', permissionKey: 'flex' },
         { icon: Settings, label: 'Configurações', path: '/configuracoes' },
     ];
+
+    const menuItems = baseMenuItems.filter(item => {
+        // Se a integração Ideris estiver desligada, oculta o módulo de Estoque para TODOS os usuários
+        if (item.path === '/estoque' && !iderisSettings?.enabled) return false;
+
+        if (userData?.isAdmin) return true;
+        if (item.permissionKey) {
+            return userData?.permissions?.[item.permissionKey] === true;
+        }
+        return true;
+    });
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
@@ -130,7 +141,7 @@ export default function Layout({ children }) {
                     )}
                 </div>
 
-                <nav className="flex-1 p-3 space-y-1 overflow-y-auto overflow-x-hidden">
+                <nav className="flex-1 p-3 space-y-1 overflow-y-auto overflow-x-hidden no-scrollbar">
                     {menuItems.map((item) => {
                         const isActive = location.pathname === item.path;
                         return (
@@ -150,37 +161,31 @@ export default function Layout({ children }) {
                     })}
                 </nav>
 
-                <div className="p-4 border-t border-gray-100">
-                    <div className={`flex items-center ${isExpanded ? 'gap-3' : 'justify-center'} p-2 rounded-lg bg-gray-50 mb-3`}>
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold flex-shrink-0">
+                {/* Bottom space - User Info */}
+                <div className="p-4 mt-auto border-t border-gray-100">
+                    <div className={`flex items-center ${isExpanded ? 'gap-3' : 'justify-center'} p-2 rounded-xl bg-gray-50 border border-gray-100`}>
+                        <div
+                            className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold flex-shrink-0 shadow-sm cursor-pointer hover:bg-red-100 hover:text-red-600 transition-colors"
+                            onClick={!isExpanded ? handleLogout : undefined}
+                            title={!isExpanded ? "Sair" : ""}
+                        >
                             {userData?.nome?.charAt(0).toUpperCase() || <User className="w-4 h-4" />}
                         </div>
                         {isExpanded && (
-                            <div className="flex-1 min-w-0 overflow-hidden">
-                                <p className="text-sm font-medium text-gray-900 truncate">
+                            <div className="flex-1 min-w-0 flex items-center justify-between gap-2 overflow-hidden">
+                                <p className="text-sm font-semibold text-gray-900 truncate">
                                     {userData?.nome || 'Usuário'}
                                 </p>
+                                <button
+                                    onClick={handleLogout}
+                                    className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                                    title="Sair"
+                                >
+                                    <LogOut className="w-4 h-4" />
+                                </button>
                             </div>
                         )}
                     </div>
-
-                    {isExpanded ? (
-                        <button
-                            onClick={handleLogout}
-                            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                            <LogOut className="w-4 h-4" />
-                            Sair
-                        </button>
-                    ) : (
-                        <button
-                            onClick={handleLogout}
-                            className="w-full flex items-center justify-center p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Sair"
-                        >
-                            <LogOut className="w-5 h-5" />
-                        </button>
-                    )}
                 </div>
             </aside>
 
@@ -220,7 +225,7 @@ export default function Layout({ children }) {
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
-                        <nav className="flex-1 space-y-1 overflow-y-auto">
+                        <nav className="flex-1 space-y-1 overflow-y-auto no-scrollbar">
                             {menuItems.map((item) => (
                                 <button
                                     key={item.path}
@@ -254,7 +259,7 @@ export default function Layout({ children }) {
             {/* Main Content */}
             <main className={`flex-1 transition-all duration-300 ease-in-out p-6 pt-20 md:pt-10 pb-10 print:m-0 print:p-0 ${isExpanded ? 'md:ml-64' : 'md:ml-20'
                 }`}>
-                <div className="max-w-7xl mx-auto">
+                <div className="w-full mx-auto">
                     {children}
                 </div>
             </main>

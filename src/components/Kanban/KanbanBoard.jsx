@@ -20,9 +20,12 @@ import {
     X,
     ClipboardList,
     Layout,
-    ListTodo
+    ListTodo,
+    ChevronLeft,
+    ChevronRight
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
+import ConfirmationModal from '../Shared/ConfirmationModal';
 
 const COLUMNS = [
     { id: 'iniciar', title: 'Iniciar', color: 'border-red-500', headerBg: 'bg-red-50 text-red-900', dotColor: 'bg-red-500' },
@@ -54,6 +57,14 @@ export default function KanbanBoard() {
     const [activeTab, setActiveTab] = useState('board');
     // Track active column index for dots indicator
     const [activeColIndex, setActiveColIndex] = useState(0);
+
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        variant: 'danger'
+    });
 
     const scrollContainerRef = useRef(null);
 
@@ -143,6 +154,14 @@ export default function KanbanBoard() {
         }
     }, [loading, activeTab]);
 
+    const handleScrollArrow = (direction) => {
+        if (!scrollContainerRef.current) return;
+        const width = scrollContainerRef.current.offsetWidth;
+        let newIndex = direction === 'next' ? activeColIndex + 1 : activeColIndex - 1;
+        newIndex = Math.max(0, Math.min(newIndex, COLUMNS.length - 1));
+
+        scrollContainerRef.current.scrollTo({ left: newIndex * width, behavior: 'smooth' });
+    };
 
     // --- Task Actions ---
 
@@ -185,28 +204,42 @@ export default function KanbanBoard() {
     };
 
     const handleDeleteTask = async (taskId) => {
-        if (!window.confirm('Excluir tarefa?')) return;
-        try {
-            await deleteDoc(doc(db, 'kanban_tarefas', taskId));
-            toast.success('Tarefa excluída');
-        } catch (error) {
-            toast.error('Erro ao excluir');
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: 'Excluir Tarefa',
+            message: 'Tem certeza que deseja excluir esta tarefa? Esta ação não pode ser desfeita.',
+            variant: 'danger',
+            onConfirm: async () => {
+                try {
+                    await deleteDoc(doc(db, 'kanban_tarefas', taskId));
+                    toast.success('Tarefa excluída');
+                } catch (error) {
+                    toast.error('Erro ao excluir');
+                }
+            }
+        });
     };
 
     const handleClearBoard = async () => {
-        if (!window.confirm('Limpar quadro inteiro?')) return;
-        try {
-            const batch = writeBatch(db);
-            tasks.forEach(task => {
-                const docRef = doc(db, 'kanban_tarefas', task.id);
-                batch.delete(docRef);
-            });
-            await batch.commit();
-            toast.success('Quadro limpo!');
-        } catch (error) {
-            toast.error('Erro ao limpar');
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: 'Limpar Quadro',
+            message: 'Tem certeza que deseja limpar todo o quadro? Todas as tarefas serão excluídas permanentemente.',
+            variant: 'danger',
+            onConfirm: async () => {
+                try {
+                    const batch = writeBatch(db);
+                    tasks.forEach(task => {
+                        const docRef = doc(db, 'kanban_tarefas', task.id);
+                        batch.delete(docRef);
+                    });
+                    await batch.commit();
+                    toast.success('Quadro limpo!');
+                } catch (error) {
+                    toast.error('Erro ao limpar');
+                }
+            }
+        });
     };
 
     const handleMoveTask = async (task, direction) => {
@@ -229,44 +262,11 @@ export default function KanbanBoard() {
                 status: newStatus,
                 dataAtualizacao: new Date().toISOString()
             });
+            toast.success('Tarefa movida!');
         } catch (error) {
             toast.error('Erro ao mover tarefa');
             // Revert on error
             setTasks(tasks);
-        }
-    };
-
-    // --- Drag & Drop ---
-
-    const handleDragStart = (e, taskId) => {
-        e.dataTransfer.setData('taskId', taskId);
-    };
-
-    const handleDragOver = (e) => {
-        e.preventDefault();
-    };
-
-    const handleDrop = async (e, newStatus) => {
-        e.preventDefault();
-        const taskId = e.dataTransfer.getData('taskId');
-
-        const task = tasks.find(t => t.id === taskId);
-        if (!task || task.status === newStatus) return;
-
-        // Optimistic update
-        const updatedTasks = tasks.map(t =>
-            t.id === taskId ? { ...t, status: newStatus } : t
-        );
-        setTasks(updatedTasks);
-
-        try {
-            await updateDoc(doc(db, 'kanban_tarefas', taskId), {
-                status: newStatus,
-                dataAtualizacao: new Date().toISOString()
-            });
-            toast.success('Tarefa movida!');
-        } catch (error) {
-            toast.error('Erro ao mover tarefa');
         }
     };
 
@@ -332,13 +332,23 @@ export default function KanbanBoard() {
     const getTasksByStatus = (status) => tasks.filter(t => t.status === status);
 
     return (
-        <div className="w-full max-w-full h-[calc(100dvh-130px)] lg:h-[calc(100dvh-50px)] flex flex-col p-1 lg:p-4 bg-slate-50 relative overflow-hidden">
+        <div className="w-full max-w-full min-h-[calc(100vh-130px)] lg:min-h-[calc(100vh-50px)] flex flex-col p-1 lg:p-4 bg-slate-50 relative">
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 flex-shrink-0">
-                <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <Layout className="w-6 h-6 text-blue-600" />
-                    Meu Quadro Kanban
-                </h1>
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                        <Layout className="w-6 h-6 text-blue-600" />
+                        Meu Quadro Kanban
+                    </h1>
+                    <div className="flex gap-4 mt-1 text-sm text-gray-500 font-medium flex-wrap">
+                        {COLUMNS.map(col => (
+                            <span key={col.id} className="flex items-center gap-1">
+                                <div className={`w-2 h-2 rounded-full ${col.dotColor}`}></div>
+                                {col.title}: <span className="text-gray-900">{getTasksByStatus(col.id).length}</span>
+                            </span>
+                        ))}
+                    </div>
+                </div>
                 <div className="flex gap-2">
                     <button
                         onClick={() => openModal()}
@@ -383,22 +393,42 @@ export default function KanbanBoard() {
 
             <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0 w-full">
                 {/* Main Board - Visible if activeTab is 'board' OR if screen is large */}
-                <div className={`flex-1 w-full overflow-hidden flex flex-col relative ${activeTab === 'board' ? 'flex' : 'hidden lg:flex'}`}>
+                <div className={`flex-1 w-full flex flex-col relative ${activeTab === 'board' ? 'flex' : 'hidden lg:flex'}`}>
+                    {/* Navigation Arrows (Float over columns) */}
+                    <div className="sticky top-1/2 z-20 w-full h-0 pointer-events-none">
+                        {activeColIndex > 0 && (
+                            <button
+                                onClick={() => handleScrollArrow('prev')}
+                                className="absolute left-2 -translate-y-1/2 pointer-events-auto bg-white/90 backdrop-blur shadow-lg hover:bg-white text-slate-600 hover:text-blue-600 rounded-full p-2.5 transition-all border border-slate-200 hover:scale-105"
+                                title="Deslizar para Esquerda"
+                            >
+                                <ChevronLeft className="w-6 h-6" />
+                            </button>
+                        )}
+
+                        {activeColIndex < COLUMNS.length - 1 && (
+                            <button
+                                onClick={() => handleScrollArrow('next')}
+                                className="absolute right-2 -translate-y-1/2 pointer-events-auto bg-white/90 backdrop-blur shadow-lg hover:bg-white text-slate-600 hover:text-blue-600 rounded-full p-2.5 transition-all border border-slate-200 hover:scale-105"
+                                title="Deslizar para Direita"
+                            >
+                                <ChevronRight className="w-6 h-6" />
+                            </button>
+                        )}
+                    </div>
 
                     {/* Columns Container */}
                     <div
                         ref={scrollContainerRef}
                         onScroll={handleScroll}
-                        className="flex lg:gap-4 flex-1 min-h-0 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-0 lg:pb-2 w-full"
+                        className="flex flex-1 overflow-x-auto snap-x snap-mandatory scroll-smooth w-full no-scrollbar relative"
                     >
                         {COLUMNS.map((column, index) => (
                             <div
                                 key={column.id}
                                 className={`
-                                    w-full flex-shrink-0 lg:w-[304px] lg:flex-none flex flex-col rounded-xl shadow-sm border border-slate-200 bg-white border-t-4 ${column.color} snap-start h-full
+                                    w-full flex-shrink-0 flex flex-col rounded-xl shadow-sm border border-slate-200 bg-white border-t-4 ${column.color} snap-start
                                 `}
-                                onDragOver={handleDragOver}
-                                onDrop={(e) => handleDrop(e, column.id)}
                             >
                                 <div className={`p-4 border-b border-slate-100 flex justify-between items-center rounded-t-lg bg-slate-50 flex-shrink-0`}>
                                     <h3 className="font-semibold text-slate-700">{column.title}</h3>
@@ -407,13 +437,11 @@ export default function KanbanBoard() {
                                     </span>
                                 </div>
 
-                                <div className="flex-1 overflow-y-auto p-3 space-y-2 pb-8 lg:pb-3 flex flex-col">
+                                <div className="flex-1 p-3 space-y-2 pb-8 lg:pb-3 flex flex-col">
                                     {getTasksByStatus(column.id).map(task => (
                                         <div
                                             key={task.id}
-                                            draggable
-                                            onDragStart={(e) => handleDragStart(e, task.id)}
-                                            className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 cursor-move hover:shadow-md transition-all group flex-shrink-0"
+                                            className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition-all group flex-shrink-0"
                                         >
                                             <div className="flex justify-between items-start mb-2">
                                                 <h4 className="font-medium text-slate-800 line-clamp-2 text-sm">{task.titulo}</h4>
@@ -431,8 +459,8 @@ export default function KanbanBoard() {
                                                     {new Date(task.dataCriacao).toLocaleDateString('pt-BR')}
                                                 </span>
                                                 <div className="flex gap-1 items-center">
-                                                    {/* Mobile Navigation Arrows */}
-                                                    <div className="flex gap-1 lg:hidden">
+                                                    {/* Navigation Arrows */}
+                                                    <div className="flex gap-1">
                                                         {index > 0 && (
                                                             <button
                                                                 onClick={() => handleMoveTask(task, 'prev')}
@@ -475,7 +503,7 @@ export default function KanbanBoard() {
                                     ))}
                                     {getTasksByStatus(column.id).length === 0 && (
                                         <div className="flex flex-1 items-center justify-center text-slate-400 text-sm italic h-full">
-                                            Arraste tarefas aqui
+                                            Nenhuma tarefa
                                         </div>
                                     )}
                                 </div>
@@ -483,8 +511,8 @@ export default function KanbanBoard() {
                         ))}
                     </div>
 
-                    {/* Mobile Page Indicators (Dots) */}
-                    <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 lg:hidden z-10 pointer-events-none">
+                    {/* Page Indicators (Dots) */}
+                    <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 z-10 pointer-events-none">
                         {COLUMNS.map((col, idx) => (
                             <div
                                 key={idx}
@@ -496,7 +524,7 @@ export default function KanbanBoard() {
                 </div>
 
                 {/* Sidebar - Todo List - Visible if activeTab is 'todos' OR if screen is large */}
-                <div className={`w-full lg:w-[304px] bg-white rounded-xl shadow-sm border border-slate-200 flex-col h-full ${activeTab === 'todos' ? 'flex' : 'hidden lg:flex'}`}>
+                <div className={`w-full lg:w-[304px] bg-white rounded-xl shadow-sm border border-slate-200 flex-col min-h-full ${activeTab === 'todos' ? 'flex' : 'hidden lg:flex'}`}>
                     <div className="p-4 border-b border-slate-100 bg-slate-50 rounded-t-xl flex-shrink-0">
                         <h3 className="font-semibold text-slate-700 flex items-center gap-2">
                             <ClipboardList className="w-5 h-5 text-green-600" />
@@ -523,7 +551,7 @@ export default function KanbanBoard() {
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                    <div className="flex-1 p-3 space-y-2">
                         {todos.map(todo => (
                             <div
                                 key={todo.id}
@@ -634,6 +662,18 @@ export default function KanbanBoard() {
                     </div>
                 </div>
             )}
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={() => {
+                    confirmModal.onConfirm();
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                }}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                variant={confirmModal.variant}
+            />
         </div>
     );
 }

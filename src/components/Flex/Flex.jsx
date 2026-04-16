@@ -35,6 +35,7 @@ import {
     CheckCircle
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import ConfirmationModal from '../Shared/ConfirmationModal';
 import './Flex.css';
 
 const Flex = () => {
@@ -175,7 +176,7 @@ const Flex = () => {
         });
         setCurrentReportId(null);
         setIsModalOpen(true);
-        setUseMlLabel(true);
+        setUseMlLabel(iderisSettings?.enabled ?? true);
     };
 
     const openEditReportModal = (report) => {
@@ -187,7 +188,7 @@ const Flex = () => {
         });
         setCurrentReportId(report.firebaseId);
         setIsModalOpen(true);
-        setUseMlLabel(true);
+        setUseMlLabel(iderisSettings?.enabled ?? true);
     };
 
     const closeReportModal = () => {
@@ -603,12 +604,12 @@ const Flex = () => {
 
             {/* List */}
             <div className="flex-reports-container">
-                <div className="flex-reports-header">
-                    <div>Data</div>
-                    <div>ID</div>
-                    <div>Alias</div>
-                    <div>Itens</div>
-                    <div>Ações</div>
+                <div className="flex-reports-header bg-gray-100 border-b-2 border-slate-200 text-gray-600 uppercase text-xs tracking-wider rounded-t-lg">
+                    <div className="font-semibold py-4 border-r-2 border-white flex items-center">Data</div>
+                    <div className="font-semibold py-4 border-r-2 border-white flex items-center justify-center">ID</div>
+                    <div className="font-semibold py-4 border-r-2 border-white flex items-center pl-4">Alias</div>
+                    <div className="font-semibold py-4 border-r-2 border-white flex items-center justify-center">Itens</div>
+                    <div className="font-semibold py-4 flex items-center justify-center">Ações</div>
                 </div>
 
                 <div className="flex-reports-list">
@@ -630,21 +631,23 @@ const Flex = () => {
                                     <span className="mobile-label">Data:</span>
                                     {new Date(report.createdAt).toLocaleDateString('pt-BR')}
                                 </div>
-                                <div className="flex-report-id">
+                                <div className="flex justify-center items-center w-full">
                                     <span className="mobile-label">ID:</span>
-                                    {report.id}
+                                    <span className="flex-report-id">
+                                        {report.id}
+                                    </span>
                                 </div>
-                                <div className="font-semibold text-gray-800 truncate w-full">
+                                <div className="font-semibold text-gray-800 truncate w-full pl-4">
                                     <span className="mobile-label">Alias:</span>
                                     {report.alias}
                                 </div>
-                                <div>
+                                <div className="flex justify-center items-center w-full">
                                     <span className="mobile-label">Itens:</span>
                                     <span className="flex-report-items-count">
                                         {report.items?.length || 0}
                                     </span>
                                 </div>
-                                <div className="flex-report-actions">
+                                <div className="flex-report-actions !justify-center w-full">
                                     <button
                                         className={`flex-btn-icon ${report.generalObservation ? 'flex-btn-info' : 'bg-gray-200 text-gray-400 cursor-default'}`}
                                         onClick={() => {
@@ -815,11 +818,11 @@ const Flex = () => {
                                 </h3>
                                 <div className="max-h-60 overflow-auto border rounded-lg">
                                     <table className="flex-items-table mb-0">
-                                        <thead>
+                                        <thead className="bg-gray-100 border-b-2 border-slate-200">
                                             <tr>
-                                                <th width="40%">ID</th>
-                                                <th width="50%">Observação</th>
-                                                <th width="10%"></th>
+                                                <th width="40%" className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-r border-white">ID</th>
+                                                <th width="50%" className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-r border-white">Observação</th>
+                                                <th width="10%" className="px-4 py-3 text-right"></th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -919,46 +922,31 @@ const Flex = () => {
                 )
             }
 
-            {/* Confirm Delete */}
-            {
-                isDeleteConfirmOpen && (
-                    <div className="flex-modal">
-                        <div className="bg-white p-6 rounded-lg max-w-sm w-full text-center shadow-xl">
-                            <AlertTriangle size={48} className="text-red-500 mx-auto mb-4" />
-                            <h3 className="text-lg font-bold mb-2">Excluir Relatório?</h3>
-                            <p className="text-gray-600 mb-6">Esta ação não pode ser desfeita.</p>
-                            <div className="flex gap-3 justify-center">
-                                <button className="flex-btn flex-btn-danger" onClick={deleteReport}>Sim, Excluir</button>
-                                <button className="flex-btn flex-btn-secondary" onClick={() => setIsDeleteConfirmOpen(false)}>Cancelar</button>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
+            <ConfirmationModal
+                isOpen={isDeleteConfirmOpen}
+                onClose={() => setIsDeleteConfirmOpen(false)}
+                onConfirm={deleteReport}
+                title="Excluir Relatório?"
+                message="Esta ação não pode ser desfeita."
+                confirmText="Sim, Excluir"
+                variant="danger"
+                icon={Trash2}
+            />
 
-            {/* Confirm Print After Save */}
-            {
-                isPrintConfirmOpen && lastSavedReport && (
-                    <div className="flex-modal">
-                        <div className="bg-white p-6 rounded-lg max-w-sm w-full text-center shadow-xl">
-                            <CheckCircle size={48} className="text-green-500 mx-auto mb-4" />
-                            <h3 className="text-lg font-bold mb-2">Salvo com Sucesso!</h3>
-                            <p className="text-gray-600 mb-6">Deseja imprimir agora?</p>
-                            <div className="flex gap-3 justify-center">
-                                <button className="flex-btn flex-btn-info" onClick={() => {
-                                    handlePrint(lastSavedReport);
-                                    setIsPrintConfirmOpen(false);
-                                }}>
-                                    <Printer size={18} /> Imprimir
-                                </button>
-                                <button className="flex-btn flex-btn-secondary" onClick={() => setIsPrintConfirmOpen(false)}>
-                                    Agora não
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
+            <ConfirmationModal
+                isOpen={isPrintConfirmOpen}
+                onClose={() => setIsPrintConfirmOpen(false)}
+                onConfirm={() => {
+                    handlePrint(lastSavedReport);
+                    setIsPrintConfirmOpen(false);
+                }}
+                title="Salvo com Sucesso!"
+                message="Deseja imprimir este relatório agora?"
+                confirmText="Imprimir"
+                cancelText="Agora não"
+                variant="info"
+                icon={CheckCircle}
+            />
         </div >
     );
 };

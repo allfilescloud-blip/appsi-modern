@@ -436,14 +436,14 @@ export default function Support() {
                     <>
                         {/* Desktop Table View */}
                         <div className="hidden lg:block overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-gray-50 border-b border-gray-200">
+                            <table className="w-full text-left table-fixed">
+                                <thead className="bg-gray-100 border-b-2 border-slate-200">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Código</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Local</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Descrição do Erro</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Correção</th>
-                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Ações</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-24 border-r border-white">Código</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-1/4 border-r border-white">Local</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-1/3 border-r border-white">Descrição do Erro</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-1/3 border-r border-white">Correção</th>
+                                        <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-28">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
@@ -454,8 +454,10 @@ export default function Support() {
                                                     {record.code}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-medium">
-                                                {record.location || '-'}
+                                            <td className="px-6 py-4 text-sm text-gray-700 font-medium">
+                                                <div className="truncate" title={record.location || '-'}>
+                                                    {record.location || '-'}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 text-sm text-gray-600">
                                                 <div className="line-clamp-2" title={record.description}>

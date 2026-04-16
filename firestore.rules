@@ -27,6 +27,11 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    // Notifications
+    match /notificacoes/{notificationId} {
+      allow read, write: if isAuthenticated();
+    }
+
     // Chamados (Tickets) - Collaborative/Support
     match /chamados/{ticketId} {
       allow read, write: if isAuthenticated();
@@ -50,10 +55,15 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
-    // Users - Protected (Users can only edit their own profile)
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return request.auth != null && (request.auth.token.email == 'admin@admin.com' || get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.isAdmin == true);
+    }
+
+    // Users - Protected (Users can edit their own profile, Admins can edit any)
     match /usuarios/{userId} {
       allow read: if isAuthenticated();
-      allow write: if request.auth.uid == userId;
+      allow write: if request.auth.uid == userId || isAdmin();
     }
   }
 }

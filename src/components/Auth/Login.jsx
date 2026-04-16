@@ -36,7 +36,27 @@ export default function Login() {
 
         try {
             if (isLogin) {
-                await signInWithEmailAndPassword(auth, email, password);
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+
+                // Buscar dados do usuário para verificar status
+                const userDoc = await getDoc(doc(db, "usuarios", userCredential.user.uid));
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    const isAdmin = email === 'admin@admin.com';
+                    const status = isAdmin ? 'aprovado' : (data.status || 'aprovado');
+
+                    if (status === 'pendente') {
+                        await auth.signOut();
+                        toast.info("Sua conta está aguardando aprovação do administrador.");
+                        return;
+                    }
+                    if (status === 'bloqueado') {
+                        await auth.signOut();
+                        toast.error("Sua conta foi bloqueada restrita.");
+                        return;
+                    }
+                }
+
                 toast.success("Login realizado com sucesso!");
                 navigate("/");
             } else {
@@ -44,14 +64,25 @@ export default function Login() {
                 const user = userCredential.user;
 
                 await updateProfile(user, { displayName: name });
+
+                // Novo usuário nasce como pendente e sem permissões inicialmente
                 await setDoc(doc(db, "usuarios", user.uid), {
                     nome: name,
                     email: email,
+                    status: 'pendente',
+                    permissions: {
+                        kanban: false,
+                        estoque: false,
+                        suporte: false,
+                        flex: false,
+                        verificacao: false
+                    },
                     dataCriacao: new Date().toISOString()
                 });
 
-                toast.success("Conta criada com sucesso!");
-                navigate("/");
+                await auth.signOut(); // Desloga o usuário recém-criado pois ele está pendente
+                toast.success("Conta criada! Aguarde a aprovação do administrador.");
+                setIsLogin(true); // Volta para tela de login
             }
         } catch (error) {
             console.error(error);
