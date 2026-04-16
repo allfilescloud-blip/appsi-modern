@@ -191,7 +191,6 @@ export default function Dashboard() {
         fetchStats();
         fetchIderisStats();
     }, [iderisSettings]);
-s]);
 
     if (loading) {
         return (
