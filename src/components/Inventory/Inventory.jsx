@@ -57,27 +57,43 @@ export default function Inventory() {
         e.preventDefault();
         if (!searchInput.trim()) return;
 
-        // Legacy logic: Split by comma, trim, filter empty
         const skuList = searchInput.split(',').map(s => s.trim()).filter(Boolean);
         if (skuList.length === 0) return;
 
+        // Check for duplicates already in the list
+        const existingSkus = new Set(products.map(p => String(p.sku)));
+        const newSkusToSearch = skuList.filter(sku => !existingSkus.has(String(sku)));
+
+        if (newSkusToSearch.length === 0) {
+            toast.info("Os SKUs informados já estão na lista.");
+            setSearchInput('');
+            return;
+        }
+
         setLoading(true);
         try {
-            const data = await searchMultipleSkus(skuList);
-            // Sort by SKU numerically/alphabetically to match legacy
-            data.sort((a, b) => String(a.sku).localeCompare(String(b.sku), undefined, { numeric: true, sensitivity: 'base' }));
+            const data = await searchMultipleSkus(newSkusToSearch);
+            
+            // Merge and sort
+            const updatedProducts = [...products, ...data];
+            updatedProducts.sort((a, b) => String(a.sku).localeCompare(String(b.sku), undefined, { numeric: true, sensitivity: 'base' }));
 
-            setProducts(data);
+            setProducts(updatedProducts);
             setLastSearch(searchInput);
+            setSearchInput(''); // Clear input for next entry
 
             // Save to localStorage
-            localStorage.setItem('inventoryLastSearch', searchInput);
-            localStorage.setItem('inventoryProducts', JSON.stringify(data));
+            localStorage.setItem('inventoryProducts', JSON.stringify(updatedProducts));
 
-            if (data.length === 0) {
-                toast.info("Nenhum produto encontrado para os SKUs informados.");
-            } else {
-                toast.success(`${data.length} produto(s) encontrado(s).`);
+            const foundCount = data.length;
+            const notFoundCount = newSkusToSearch.length - foundCount;
+
+            if (foundCount > 0) {
+                toast.success(`${foundCount} produto(s) adicionado(s).`);
+            }
+            
+            if (notFoundCount > 0) {
+                toast.warning(`${notFoundCount} SKU(s) não encontrados no Ideris.`);
             }
         } catch (error) {
             toast.error("Erro ao buscar SKUs.");
@@ -106,6 +122,23 @@ export default function Inventory() {
                 toast.info("Lista limpa.");
             }
         });
+    };
+
+    const handleRemoveProduct = (sku) => {
+        setProducts(prev => {
+            const updated = prev.filter(p => String(p.sku) !== String(sku));
+            localStorage.setItem('inventoryProducts', JSON.stringify(updated));
+            return updated;
+        });
+
+        // Remove from pending updates
+        setStockUpdates(prev => {
+            const next = { ...prev };
+            delete next[sku];
+            return next;
+        });
+
+        toast.info(`SKU ${sku} removido da lista.`);
     };
 
     const handleStockInputChange = (sku, value) => {
@@ -236,10 +269,27 @@ export default function Inventory() {
                     </div>
                 </form>
 
-                {lastSearch && (
-                    <div className="mt-4 text-center text-sm text-gray-500">
-                        <p>Última pesquisa: {lastSearch}</p>
-                        {!loading && <p className="mt-1 text-green-600 font-medium">Consulta concluída.</p>}
+                {products.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mr-1">SKUs Monitorados:</span>
+                            <div className="flex flex-wrap gap-1.5 font-mono">
+                                {products.map((product) => (
+                                    <span 
+                                        key={product.id} 
+                                        className="bg-slate-50 text-slate-600 px-2 py-0.5 rounded-md text-xs border border-slate-200 shadow-sm flex items-center gap-1 animate-in fade-in zoom-in duration-300"
+                                    >
+                                        {product.sku}
+                                    </span>
+                                ))}
+                            </div>
+                            {!loading && (
+                                <div className="ml-auto flex items-center gap-1.5 text-xs text-green-600 font-semibold bg-green-50 px-2 py-1 rounded-full border border-green-100">
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    <span>Atualizado</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>
@@ -254,7 +304,8 @@ export default function Inventory() {
                                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600 border-r border-white">SKU</th>
                                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600 border-r border-white">Produto</th>
                                 <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600 border-r border-white">Estoque Atual</th>
-                                <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600">Atualizar</th>
+                                <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600 border-r border-white">Novo Estoque</th>
+                                <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
@@ -292,6 +343,15 @@ export default function Inventory() {
                                                 className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-center transition-all hover:border-blue-400"
                                             />
                                         </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <button
+                                                onClick={() => handleRemoveProduct(product.sku)}
+                                                className="text-gray-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-all"
+                                                title="Remover da lista"
+                                            >
+                                                <Trash2 className="w-5 h-5" />
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))
                             )}
@@ -313,6 +373,12 @@ export default function Inventory() {
                                         <span className="text-xl font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 font-mono">
                                             {product.sku}
                                         </span>
+                                        <button
+                                            onClick={() => handleRemoveProduct(product.sku)}
+                                            className="text-gray-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-all"
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                        </button>
                                     </div>
                                     <h3 className="font-bold text-gray-900 leading-relaxed text-lg mb-4">
                                         {product.title || product.nome}
