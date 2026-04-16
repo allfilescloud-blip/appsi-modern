@@ -9,7 +9,8 @@ import {
     AlertCircle,
     TrendingUp,
     TrendingDown,
-    LayoutDashboard
+    LayoutDashboard,
+    RefreshCw
 } from 'lucide-react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { getOpenOrdersSummary } from '../../services/ideris';
@@ -55,141 +56,142 @@ export default function Dashboard() {
     const [iderisStats, setIderisStats] = useState(null);
     const [iderisLoading, setIderisLoading] = useState(true);
 
+    const fetchStats = async () => {
+        try {
+            const chamadosRef = collection(db, 'chamados');
+            const q = query(chamadosRef);
+            const snapshot = await getDocs(q);
+
+            let total = 0;
+            let abertos = 0;
+            let fechados = 0;
+            let hoje = 0;
+            const types = {};
+            const userCounts = {}; // Map to store counts per user
+            const monthlyCounts = {}; // "yyyy-MM" -> count
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(today.getDate() - 30);
+            thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const dataAbertura = new Date(data.dataAbertura);
+
+                if (dataAbertura >= thirtyDaysAgo) total++;
+                if (data.status === 'Aberto' || data.status === 'Pendente') abertos++;
+                if (data.status === 'Fechado' && dataAbertura >= thirtyDaysAgo) fechados++;
+
+                if (dataAbertura >= today) hoje++;
+
+                // Stats for charts - Types
+                const type = data.tipo || 'Outros';
+                types[type] = (types[type] || 0) + 1;
+
+                // Stats for charts - Monthly Volume
+                const monthKey = format(dataAbertura, 'yyyy-MM');
+                monthlyCounts[monthKey] = (monthlyCounts[monthKey] || 0) + 1;
+
+                // Stats per User (Active tickets only: Aberto, Pendente, Revisão)
+                if (['Aberto', 'Pendente', 'Revisão'].includes(data.status)) {
+                    const resp = data.responsavel || 'Não atribuído';
+                    userCounts[resp] = (userCounts[resp] || 0) + 1;
+                }
+            });
+
+            // Convert userCounts map to sorted array
+            const userStatsArray = Object.entries(userCounts)
+                .map(([name, count]) => ({ name, count }))
+                .sort((a, b) => b.count - a.count); // Sort by count desc
+
+            setUserStats(userStatsArray);
+
+            setStats({
+                total,
+                abertos,
+                fechados,
+                hoje
+            });
+
+            // Prepare Doughnut Chart Data
+            setChartData({
+                labels: Object.keys(types),
+                datasets: [
+                    {
+                        label: 'Chamados por Tipo',
+                        data: Object.values(types),
+                        backgroundColor: [
+                            'rgba(59, 130, 246, 0.7)',
+                            'rgba(16, 185, 129, 0.7)',
+                            'rgba(245, 158, 11, 0.7)',
+                            'rgba(239, 68, 68, 0.7)',
+                            'rgba(139, 92, 246, 0.7)',
+                        ],
+                        borderColor: [
+                            'rgb(59, 130, 246)',
+                            'rgb(16, 185, 129)',
+                            'rgb(245, 158, 11)',
+                            'rgb(239, 68, 68)',
+                            'rgb(139, 92, 246)',
+                        ],
+                        borderWidth: 1,
+                    },
+                ],
+            });
+
+            // Prepare Bar Chart Data (Monthly)
+            const sortedMonths = Object.keys(monthlyCounts).sort();
+            const monthLabels = sortedMonths.map(key => {
+                const [year, month] = key.split('-');
+                const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                return format(date, 'MMM/yy', { locale: ptBR });
+            });
+            const monthValues = sortedMonths.map(key => monthlyCounts[key]);
+
+            setMonthlyChartData({
+                labels: monthLabels,
+                datasets: [
+                    {
+                        label: 'Quantidade de Chamados',
+                        data: monthValues,
+                        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                        borderColor: 'rgb(59, 130, 246)',
+                        borderWidth: 1,
+                    },
+                ],
+            });
+
+        } catch (error) {
+            console.error("Erro ao buscar estatísticas:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchIderisStats = async () => {
+        if (!iderisSettings?.enabled) {
+            setIderisLoading(false);
+            return;
+        }
+        setIderisLoading(true);
+        try {
+            const data = await getOpenOrdersSummary();
+            setIderisStats(data);
+        } catch (error) {
+            console.error("Erro ao buscar estatísticas do Ideris:", error);
+        } finally {
+            setIderisLoading(false);
+        }
+    };
+
     useEffect(() => {
-        async function fetchStats() {
-            try {
-                const chamadosRef = collection(db, 'chamados');
-                const q = query(chamadosRef);
-                const snapshot = await getDocs(q);
-
-                let total = 0;
-                let abertos = 0;
-                let fechados = 0;
-                let hoje = 0;
-                const types = {};
-                const userCounts = {}; // Map to store counts per user
-                const monthlyCounts = {}; // "yyyy-MM" -> count
-
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-
-                const thirtyDaysAgo = new Date();
-                thirtyDaysAgo.setDate(today.getDate() - 30);
-                thirtyDaysAgo.setHours(0, 0, 0, 0);
-
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    const dataAbertura = new Date(data.dataAbertura);
-
-                    if (dataAbertura >= thirtyDaysAgo) total++;
-                    if (data.status === 'Aberto' || data.status === 'Pendente') abertos++;
-                    if (data.status === 'Fechado' && dataAbertura >= thirtyDaysAgo) fechados++;
-
-                    if (dataAbertura >= today) hoje++;
-
-                    // Stats for charts - Types
-                    const type = data.tipo || 'Outros';
-                    types[type] = (types[type] || 0) + 1;
-
-                    // Stats for charts - Monthly Volume
-                    const monthKey = format(dataAbertura, 'yyyy-MM');
-                    monthlyCounts[monthKey] = (monthlyCounts[monthKey] || 0) + 1;
-
-                    // Stats per User (Active tickets only: Aberto, Pendente, Revisão)
-                    if (['Aberto', 'Pendente', 'Revisão'].includes(data.status)) {
-                        const resp = data.responsavel || 'Não atribuído';
-                        userCounts[resp] = (userCounts[resp] || 0) + 1;
-                    }
-                });
-
-                // Convert userCounts map to sorted array
-                const userStatsArray = Object.entries(userCounts)
-                    .map(([name, count]) => ({ name, count }))
-                    .sort((a, b) => b.count - a.count); // Sort by count desc
-
-                setUserStats(userStatsArray);
-
-                setStats({
-                    total,
-                    abertos,
-                    fechados,
-                    hoje
-                });
-
-                // Prepare Doughnut Chart Data
-                setChartData({
-                    labels: Object.keys(types),
-                    datasets: [
-                        {
-                            label: 'Chamados por Tipo',
-                            data: Object.values(types),
-                            backgroundColor: [
-                                'rgba(59, 130, 246, 0.7)',
-                                'rgba(16, 185, 129, 0.7)',
-                                'rgba(245, 158, 11, 0.7)',
-                                'rgba(239, 68, 68, 0.7)',
-                                'rgba(139, 92, 246, 0.7)',
-                            ],
-                            borderColor: [
-                                'rgb(59, 130, 246)',
-                                'rgb(16, 185, 129)',
-                                'rgb(245, 158, 11)',
-                                'rgb(239, 68, 68)',
-                                'rgb(139, 92, 246)',
-                            ],
-                            borderWidth: 1,
-                        },
-                    ],
-                });
-
-                // Prepare Bar Chart Data (Monthly)
-                const sortedMonths = Object.keys(monthlyCounts).sort();
-                const monthLabels = sortedMonths.map(key => {
-                    const [year, month] = key.split('-');
-                    const date = new Date(parseInt(year), parseInt(month) - 1, 1);
-                    return format(date, 'MMM/yy', { locale: ptBR });
-                });
-                const monthValues = sortedMonths.map(key => monthlyCounts[key]);
-
-                setMonthlyChartData({
-                    labels: monthLabels,
-                    datasets: [
-                        {
-                            label: 'Quantidade de Chamados',
-                            data: monthValues,
-                            backgroundColor: 'rgba(59, 130, 246, 0.5)',
-                            borderColor: 'rgb(59, 130, 246)',
-                            borderWidth: 1,
-                        },
-                    ],
-                });
-
-            } catch (error) {
-                console.error("Erro ao buscar estatísticas:", error);
-            } finally {
-                setLoading(false);
-            }
-        }
-
-
-        async function fetchIderisStats() {
-            if (!iderisSettings?.enabled) {
-                setIderisLoading(false);
-                return;
-            }
-            try {
-                const data = await getOpenOrdersSummary();
-                setIderisStats(data);
-            } catch (error) {
-                console.error("Erro ao buscar estatísticas do Ideris:", error);
-            } finally {
-                setIderisLoading(false);
-            }
-        }
-
         fetchStats();
         fetchIderisStats();
     }, [iderisSettings]);
+s]);
 
     if (loading) {
         return (
@@ -274,10 +276,20 @@ export default function Dashboard() {
             {/* Pedidos Ideris */}
             {iderisSettings?.enabled && (
                 <div className="space-y-4">
-                    <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                        <ShoppingCart className="w-6 h-6 text-blue-600" />
-                        Resumo de Pedidos (Ideris)
-                    </h3>
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            <ShoppingCart className="w-6 h-6 text-blue-600" />
+                            Resumo de Pedidos (Ideris)
+                        </h3>
+                        <button
+                            onClick={fetchIderisStats}
+                            disabled={iderisLoading}
+                            className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition-all disabled:opacity-50"
+                            title="Atualizar Estatísticas Ideris"
+                        >
+                            <RefreshCw className={`w-5 h-5 ${iderisLoading ? 'animate-spin' : ''}`} />
+                        </button>
+                    </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {/* Card Total Ideris */}
