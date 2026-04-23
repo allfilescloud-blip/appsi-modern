@@ -361,7 +361,7 @@ export default function SkuReport() {
             <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
                     
                     {/* Summary Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 gap-4">
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center gap-4">
                             <div className="p-3 bg-blue-100 text-blue-600 rounded-lg">
                                 <Package className="w-8 h-8" />
@@ -437,11 +437,14 @@ export default function SkuReport() {
                                         filteredData.map((item, index) => (
                                             <tr key={index} className="hover:bg-blue-50/50 transition-colors">
                                                 <td className="px-6 py-4">
-                                                    <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                                                    <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-100 print:border-gray-300 print:text-gray-800 print:bg-white">
                                                         {item.sku}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 text-gray-700 font-medium">
+                                                <td 
+                                                    className="px-6 py-4 text-gray-700 font-medium max-w-[150px] sm:max-w-xs md:max-w-md lg:max-w-lg xl:max-w-2xl print:max-w-[350px] truncate"
+                                                    title={item.title}
+                                                >
                                                     {item.title}
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
