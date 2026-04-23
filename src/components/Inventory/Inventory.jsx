@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { searchMultipleSkus, updateStock } from '../../services/ideris';
 import { toast } from 'react-toastify';
-import { Search, Save, Trash2, CheckCircle, X, Package } from 'lucide-react';
+import { Search, Save, Trash2, CheckCircle, X, Package, RefreshCcw } from 'lucide-react';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 
 export default function Inventory() {
@@ -14,6 +14,7 @@ export default function Inventory() {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(false);
     const [updating, setUpdating] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const [lastSearch, setLastSearch] = useState('');
 
     // Store new stock values: { [sku]: number }
@@ -208,6 +209,30 @@ export default function Inventory() {
         });
     };
 
+    const handleRefreshAll = async () => {
+        if (products.length === 0) {
+            toast.info("Nenhum item na lista para atualizar.");
+            return;
+        }
+
+        setRefreshing(true);
+        try {
+            const skusToRefresh = products.map(p => String(p.sku));
+            const refreshedData = await searchMultipleSkus(skusToRefresh);
+            
+            refreshedData.sort((a, b) => String(a.sku).localeCompare(String(b.sku), undefined, { numeric: true, sensitivity: 'base' }));
+
+            setProducts(refreshedData);
+            localStorage.setItem('inventoryProducts', JSON.stringify(refreshedData));
+            toast.success("Estoque atualizado com sucesso.");
+        } catch (error) {
+            toast.error("Erro ao atualizar o estoque.");
+            console.error(error);
+        } finally {
+            setRefreshing(false);
+        }
+    };
+
     return (
         <div className="max-w-6xl mx-auto space-y-6">
             <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
@@ -259,12 +284,22 @@ export default function Inventory() {
                         </button>
                         <button
                             type="button"
+                            onClick={handleRefreshAll}
+                            disabled={refreshing || products.length === 0}
+                            className="bg-purple-600 hover:bg-purple-700 text-white p-2.5 rounded-lg font-medium shadow-sm hover:shadow transition-all flex items-center justify-center disabled:opacity-70 disabled:shadow-none"
+                            title="Verificar estoque atual de todos os itens"
+                        >
+                            {refreshing ? <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" /> : <RefreshCcw className="w-5 h-5" />}
+                        </button>
+                        <button
+                            type="button"
                             onClick={handleBulkUpdate}
                             disabled={updating || products.length === 0}
                             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:shadow-none"
+                            title="Salvar alterações de estoque no Ideris"
                         >
                             {updating ? <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" /> : <Save className="w-5 h-5" />}
-                            Atualizar
+                            Salvar Alterações
                         </button>
                     </div>
                 </form>
