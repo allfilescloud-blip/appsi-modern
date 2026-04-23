@@ -20,7 +20,8 @@ import {
     ScanBarcode,
     Bell,
     Pin,
-    PinOff
+    PinOff,
+    BarChart2
 } from 'lucide-react';
 
 export default function Layout({ children }) {
@@ -81,6 +82,7 @@ export default function Layout({ children }) {
         { icon: CheckSquare, label: 'Verificação', path: '/verificacao', permissionKey: 'verificacao' },
         { icon: LifeBuoy, label: 'Suporte', path: '/suporte', permissionKey: 'suporte' },
         { icon: ScanBarcode, label: 'Flex', path: '/flex', permissionKey: 'flex' },
+        { icon: BarChart2, label: 'Relatórios SKU', path: '/sku-report', permissionKey: 'estoque' },
         { icon: Settings, label: 'Configurações', path: '/configuracoes' },
     ];
 

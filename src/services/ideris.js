@@ -215,4 +215,73 @@ export const getOpenOrdersSummary = async () => {
     }
 };
 
+// --- Funções para o Relatório de SKU ---
+
+export const getMarketplaces = async () => {
+    if (!jwtToken) await loginIderis();
+    const response = await api.get('/settings/marketplace');
+    return response.data.obj || [];
+};
+
+export const getIderisStatuses = async () => {
+    if (!jwtToken) await loginIderis();
+    const response = await api.get('/status/search');
+    const items = response.data.obj || response.data.result || response.data || [];
+    return items
+        .map(s => ({ id: s.id, name: s.description || s.name }))
+        .filter(s => !s.name.toLowerCase().includes('b2w'))
+        .sort((a, b) => a.name.localeCompare(b.name));
+};
+
+export const searchOrdersByFilters = async ({ authenticationId, statusId, dateStart, dateEnd, offset = 0, limit = 50 }) => {
+    if (!jwtToken) await loginIderis();
+    
+    const params = {
+        limit,
+        offset
+    };
+    
+    if (authenticationId) params.authenticationId = authenticationId;
+    if (statusId) params.statusId = statusId;
+    if (dateStart) params.dateStart = dateStart;
+    if (dateEnd) params.dateEnd = dateEnd;
+    
+    const response = await api.get('/order/search', { params });
+    const items = response.data.obj || response.data.items || response.data.result || [];
+    const total = response.data.total || items.length;
+    
+    return { items, total };
+};
+
+export const fetchOrderDetailsBatch = async (orderIds, onProgress) => {
+    if (!jwtToken) await loginIderis();
+    
+    const BATCH_SIZE = 10;
+    const allDetails = [];
+    let completed = 0;
+    
+    for (let i = 0; i < orderIds.length; i += BATCH_SIZE) {
+        const batch = orderIds.slice(i, i + BATCH_SIZE);
+        const promises = batch.map(id => api.get(`/order/${id}`).catch(err => {
+            console.error(`Erro ao buscar pedido ${id}`, err);
+            return null;
+        }));
+        
+        const results = await Promise.all(promises);
+        
+        results.forEach(res => {
+            if (res && res.data) {
+                allDetails.push(res.data.obj || res.data);
+            }
+        });
+        
+        completed += batch.length;
+        if (onProgress) {
+            onProgress(Math.min(100, Math.round((completed / orderIds.length) * 100)));
+        }
+    }
+    
+    return allDetails;
+};
+
 export default api;

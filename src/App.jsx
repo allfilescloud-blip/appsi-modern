@@ -18,6 +18,7 @@ const Verification = lazy(() => import("./components/Verification/Verification")
 const Support = lazy(() => import("./components/Support/Support"));
 const Settings = lazy(() => import("./components/Settings/Settings"));
 const Flex = lazy(() => import("./components/Flex/Flex"));
+const SkuReport = lazy(() => import("./components/Reports/SkuReport"));
 
 const Loading = () => <div className="flex items-center justify-center h-screen bg-gray-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
 
@@ -50,6 +51,7 @@ function App() {
                                         <Route path="/suporte" element={<Support />} />
                                         <Route path="/configuracoes" element={<Settings />} />
                                         <Route path="/flex" element={<Flex />} />
+                                        <Route path="/sku-report" element={<SkuReport />} />
                                     </Routes>
                                 </Layout>
                             </ProtectedRoute>
