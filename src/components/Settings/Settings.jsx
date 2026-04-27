@@ -19,7 +19,8 @@ export default function Settings() {
     const [generalSettings, setGeneralSettings] = useState({
         ticketTypes: [],
         marketplaces: [],
-        allowRegistration: true
+        allowRegistration: true,
+        enableInventorySales: true
     });
     const [newItem, setNewItem] = useState("");
     const [activeList, setActiveList] = useState("ticketTypes"); // 'ticketTypes' or 'marketplaces'
@@ -160,7 +161,8 @@ export default function Settings() {
                         'Faltou item', 'Dúvida técnica', 'Cancelamento'
                     ],
                     marketplaces: ['Mercado Livre', 'Amazon', 'Interno', 'Shopee', 'Magalu'],
-                    allowRegistration: true
+                    allowRegistration: true,
+                    enableInventorySales: true
                 };
                 await setDoc(docRef, defaults);
                 setGeneralSettings(defaults);
@@ -255,7 +257,8 @@ export default function Settings() {
                     'Faltou item', 'Dúvida técnica', 'Cancelamento'
                 ],
                 marketplaces: ['Mercado Livre', 'Amazon', 'Interno', 'Shopee', 'Magalu'],
-                allowRegistration: generalSettings.allowRegistration
+                allowRegistration: generalSettings.allowRegistration !== false,
+                enableInventorySales: generalSettings.enableInventorySales !== false
             };
 
             setLoadingSettings(true);
@@ -552,20 +555,38 @@ export default function Settings() {
                                 <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                                     <Shield className="w-5 h-5 text-blue-600" /> Configurações Gerais
                                 </h2>
-                                <div className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg">
-                                    <div>
-                                        <h3 className="font-medium text-gray-800">Permitir Novos Cadastros</h3>
-                                        <p className="text-sm text-gray-500">Habilita ou desabilita a opção de "Cadastre-se" na tela de login.</p>
+                                <div className="flex flex-col gap-4">
+                                    <div className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg">
+                                        <div>
+                                            <h3 className="font-medium text-gray-800">Permitir Novos Cadastros</h3>
+                                            <p className="text-sm text-gray-500">Habilita ou desabilita a opção de "Cadastre-se" na tela de login.</p>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={generalSettings.allowRegistration !== false}
+                                                onChange={e => setGeneralSettings(prev => ({ ...prev, allowRegistration: e.target.checked }))}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                        </label>
                                     </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={generalSettings.allowRegistration}
-                                            onChange={e => setGeneralSettings(prev => ({ ...prev, allowRegistration: e.target.checked }))}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                    </label>
+                                    
+                                    <div className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg">
+                                        <div>
+                                            <h3 className="font-medium text-gray-800">Habilitar Coluna de Vendas no Estoque</h3>
+                                            <p className="text-sm text-gray-500">Mostra a coluna de vendas e o botão de carregar na tela de gestão de estoque.</p>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={generalSettings.enableInventorySales !== false}
+                                                onChange={e => setGeneralSettings(prev => ({ ...prev, enableInventorySales: e.target.checked }))}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 

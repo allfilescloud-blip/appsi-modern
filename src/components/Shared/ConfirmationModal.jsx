@@ -41,7 +41,7 @@ const ConfirmationModal = ({
                         {title}
                     </h3>
 
-                    <p className="text-gray-500 mb-8 leading-relaxed">
+                    <p className="text-gray-500 mb-8 leading-relaxed whitespace-pre-line">
                         {message}
                     </p>
 

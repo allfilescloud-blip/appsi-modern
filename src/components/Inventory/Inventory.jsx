@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { searchMultipleSkus, updateStock } from '../../services/ideris';
+import { searchMultipleSkus, updateStock, searchOrdersByFilters, fetchOrderDetailsBatch } from '../../services/ideris';
 import { toast } from 'react-toastify';
-import { Search, Save, Trash2, CheckCircle, X, Package, RefreshCcw } from 'lucide-react';
+import { Search, Save, Trash2, CheckCircle, X, Package, RefreshCcw, Download } from 'lucide-react';
 import ConfirmationModal from '../Shared/ConfirmationModal';
+import { db } from '../../services/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 export default function Inventory() {
     const { iderisSettings } = useAuth();
@@ -15,10 +17,114 @@ export default function Inventory() {
     const [loading, setLoading] = useState(false);
     const [updating, setUpdating] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [loadingSales, setLoadingSales] = useState(false);
     const [lastSearch, setLastSearch] = useState('');
 
     // Store new stock values: { [sku]: number }
     const [stockUpdates, setStockUpdates] = useState({});
+
+    // Store sales values: { [sku]: number }
+    const [salesData, setSalesData] = useState({});
+    
+    // Feature flag
+    const [enableSalesColumn, setEnableSalesColumn] = useState(false);
+
+    // Progress tracking
+    const [salesProgress, setSalesProgress] = useState(0);
+    const [salesStatusText, setSalesStatusText] = useState('');
+
+    useEffect(() => {
+        const fetchSettings = async () => {
+            try {
+                const docRef = doc(db, "sys_settings", "general");
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    setEnableSalesColumn(docSnap.data().enableInventorySales !== false);
+                }
+            } catch (error) {
+                console.error("Erro ao buscar configurações gerais:", error);
+            }
+        };
+        fetchSettings();
+    }, []);
+
+    const handleLoadSales = async () => {
+        if (products.length === 0) {
+            toast.info("Não há itens na lista para carregar vendas.");
+            return;
+        }
+
+        setLoadingSales(true);
+        setSalesProgress(0);
+        setSalesStatusText('Buscando pedidos em aberto...');
+        try {
+            let allOrderIds = [];
+            let offset = 0;
+            const limit = 50;
+            let hasMore = true;
+
+            while (hasMore) {
+                const { items } = await searchOrdersByFilters({
+                    statusId: '1007',
+                    limit,
+                    offset
+                });
+                
+                if (items && items.length > 0) {
+                    allOrderIds.push(...items.map(o => o.id || o.orderId));
+                    offset += items.length;
+                    
+                    if (items.length < limit) {
+                        hasMore = false;
+                    }
+                } else {
+                    hasMore = false;
+                }
+                setSalesProgress(prev => Math.min(prev + 5, 15));
+            }
+
+            if (allOrderIds.length === 0) {
+                toast.info("Não há pedidos em aberto no momento.");
+                setSalesData({});
+                setLoadingSales(false);
+                setSalesStatusText('');
+                setSalesProgress(0);
+                return;
+            }
+
+            setSalesStatusText(`Baixando detalhes de ${allOrderIds.length} pedido(s)...`);
+            const details = await fetchOrderDetailsBatch(allOrderIds, (progress) => {
+                setSalesProgress(15 + Math.floor(progress * 0.85));
+            });
+            
+            setSalesStatusText('Processando dados...');
+            
+            const newSalesData = {};
+            details.forEach(order => {
+                const items = order.items || order.products || [];
+                items.forEach(item => {
+                    const sku = String(item.sku || item.codeProduct).trim();
+                    const qty = Number(item.quantity) || 1;
+                    if (sku) {
+                        newSalesData[sku] = (newSalesData[sku] || 0) + qty;
+                    }
+                });
+            });
+
+            setSalesData(newSalesData);
+            setSalesProgress(100);
+            toast.success("Vendas carregadas com sucesso!");
+        } catch (error) {
+            console.error("Erro ao carregar vendas:", error);
+            toast.error("Ocorreu um erro ao buscar as vendas.");
+        } finally {
+            setLoadingSales(false);
+            setTimeout(() => {
+                setSalesStatusText('');
+                setSalesProgress(0);
+            }, 1000);
+        }
+    };
 
     useEffect(() => {
         if (iderisSettings && !iderisSettings.enabled) {
@@ -115,6 +221,7 @@ export default function Inventory() {
                 setSearchInput('');
                 setLastSearch('');
                 setStockUpdates({});
+                setSalesData({});
 
                 // Clear from localStorage
                 localStorage.removeItem('inventoryLastSearch');
@@ -161,11 +268,18 @@ export default function Inventory() {
             return;
         }
 
+        const hasSalesToDeduct = skusToUpdate.some(sku => salesData[sku] > 0);
+        let confirmMessage = `Deseja atualizar o estoque de ${skusToUpdate.length} item(ns)? Esta ação alterará os valores no Ideris.`;
+        
+        if (hasSalesToDeduct) {
+            confirmMessage = `Deseja atualizar o estoque de ${skusToUpdate.length} item(ns)?\n\n⚠️ ATENÇÃO: Os valores informados em "Novo Estoque" serão subtraídos as Vendas pendentes antes da atualização.`;
+        }
+
         setConfirmModal({
             isOpen: true,
             title: 'Atualizar Estoque',
-            message: `Deseja atualizar o estoque de ${skusToUpdate.length} item(ns)? Esta ação alterará os valores no Ideris.`,
-            variant: 'info',
+            message: confirmMessage,
+            variant: hasSalesToDeduct ? 'warning' : 'info',
             onConfirm: async () => {
                 setUpdating(true);
                 let successCount = 0;
@@ -173,14 +287,17 @@ export default function Inventory() {
 
                 // Iterate and update one by one as per legacy logic
                 for (const sku of skusToUpdate) {
-                    const newQty = parseInt(stockUpdates[sku], 10);
+                    const newQtyInput = parseInt(stockUpdates[sku], 10);
+                    const sales = salesData[sku] || 0;
+                    const finalQtyToAPI = newQtyInput - sales;
+
                     try {
-                        await updateStock(sku, newQty);
+                        await updateStock(sku, finalQtyToAPI);
 
                         // Update local state to reflect change immediately
                         setProducts(prev => {
                             const updatedProducts = prev.map(p =>
-                                p.sku === sku ? { ...p, stockAmount: newQty } : p
+                                p.sku === sku ? { ...p, stockAmount: finalQtyToAPI } : p
                             );
                             // Update localStorage with new stock amounts
                             localStorage.setItem('inventoryProducts', JSON.stringify(updatedProducts));
@@ -223,6 +340,7 @@ export default function Inventory() {
             refreshedData.sort((a, b) => String(a.sku).localeCompare(String(b.sku), undefined, { numeric: true, sensitivity: 'base' }));
 
             setProducts(refreshedData);
+            setSalesData({});
             localStorage.setItem('inventoryProducts', JSON.stringify(refreshedData));
             toast.success("Estoque atualizado com sucesso.");
         } catch (error) {
@@ -282,6 +400,17 @@ export default function Inventory() {
                             <Trash2 className="w-5 h-5" />
                             Limpar
                         </button>
+                        {enableSalesColumn && (
+                            <button
+                                type="button"
+                                onClick={handleLoadSales}
+                                disabled={loadingSales || refreshing || products.length === 0}
+                                className="bg-orange-500 hover:bg-orange-600 text-white p-2.5 rounded-lg font-medium shadow-sm hover:shadow transition-all flex items-center justify-center disabled:opacity-70 disabled:shadow-none"
+                                title="Carregar vendas em Aberto"
+                            >
+                                {loadingSales ? <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" /> : <Download className="w-5 h-5" />}
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={handleRefreshAll}
@@ -303,6 +432,23 @@ export default function Inventory() {
                         </button>
                     </div>
                 </form>
+
+                {loadingSales && (
+                    <div className="mt-4 pt-4 border-t border-gray-100 animate-in fade-in duration-300">
+                        <div className="flex justify-between items-center mb-1.5">
+                            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{salesStatusText}</span>
+                            <span className="text-xs font-bold text-orange-600">{salesProgress}%</span>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden border border-gray-200">
+                            <div 
+                                className="bg-orange-500 h-2.5 rounded-full transition-all duration-300 ease-out relative" 
+                                style={{ width: `${salesProgress}%` }}
+                            >
+                                <div className="absolute top-0 left-0 right-0 bottom-0 bg-white/20 animate-pulse"></div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {products.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-gray-100">
@@ -338,6 +484,7 @@ export default function Inventory() {
                             <tr>
                                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600 border-r border-white">SKU</th>
                                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600 border-r border-white">Produto</th>
+                                {enableSalesColumn && <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600 border-r border-white">Vendas</th>}
                                 <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600 border-r border-white">Estoque Atual</th>
                                 <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600 border-r border-white">Novo Estoque</th>
                                 <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600">Ações</th>
@@ -346,7 +493,7 @@ export default function Inventory() {
                         <tbody className="divide-y divide-gray-200">
                             {products.length === 0 ? (
                                 <tr>
-                                    <td colSpan="4" className="p-8 text-center text-gray-500">
+                                    <td colSpan="5" className="p-8 text-center text-gray-500">
                                         Nenhum produto listado.
                                     </td>
                                 </tr>
@@ -363,6 +510,13 @@ export default function Inventory() {
                                                 {product.title || product.nome}
                                             </span>
                                         </td>
+                                        {enableSalesColumn && (
+                                            <td className="px-6 py-4 text-center">
+                                                <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-orange-50 text-orange-700 font-bold text-sm border border-orange-100 min-w-[2.5rem]">
+                                                    {salesData[product.sku] !== undefined ? salesData[product.sku] : '-'}
+                                                </span>
+                                            </td>
+                                        )}
                                         <td className="px-6 py-4 text-center">
                                             <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-bold text-sm border border-blue-100">
                                                 {product.stockAmount}
@@ -419,10 +573,17 @@ export default function Inventory() {
                                         {product.title || product.nome}
                                     </h3>
 
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className={`grid ${enableSalesColumn ? 'grid-cols-3 gap-3' : 'grid-cols-2 gap-4'}`}>
+                                        {enableSalesColumn && (
+                                            <div className="bg-orange-50 p-3 rounded-xl border border-orange-100 text-center flex flex-col justify-center">
+                                                <p className="text-[10px] text-orange-500 uppercase font-bold tracking-wider mb-1">Vendas</p>
+                                                <p className="text-xl font-black text-gray-800">{salesData[product.sku] !== undefined ? salesData[product.sku] : '-'}</p>
+                                            </div>
+                                        )}
+
                                         <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 text-center flex flex-col justify-center">
-                                            <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Atual</p>
-                                            <p className="text-2xl font-black text-gray-800">{product.stockAmount}</p>
+                                            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-1">Atual</p>
+                                            <p className="text-xl font-black text-gray-800">{product.stockAmount}</p>
                                         </div>
 
                                         <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center flex flex-col justify-center relative">
