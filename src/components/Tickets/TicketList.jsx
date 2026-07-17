@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { db } from '../../services/firebase';
-import { collection, query, orderBy, onSnapshot, doc, getDoc } from 'firebase/firestore';
-import { Plus, Search, Filter, FilterX, Eye, Paperclip, X, Calendar, AlertTriangle, Ticket } from 'lucide-react';
+import { collection, query, orderBy, onSnapshot, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { Plus, Search, Filter, FilterX, Eye, Paperclip, X, Calendar, AlertTriangle, Ticket, Flag, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 // Helper to format YYYY-MM-DD date without timezone shift
@@ -83,6 +83,7 @@ export default function TicketList() {
     const [typeFilter, setTypeFilter] = useState(localStorage.getItem('ticketTypeFilter') || 'Todos');
     const [marketplaceFilter, setMarketplaceFilter] = useState(localStorage.getItem('ticketMarketplaceFilter') || 'Todos');
     const [responsibleFilter, setResponsibleFilter] = useState(localStorage.getItem('ticketResponsibleFilter') || 'Todos');
+    const [flagFilter, setFlagFilter] = useState(localStorage.getItem('ticketFlagFilter') || 'Todos');
 
     // Persistence Effects
     useEffect(() => { localStorage.setItem('ticketSearchTerm', searchTerm); }, [searchTerm]);
@@ -90,6 +91,7 @@ export default function TicketList() {
     useEffect(() => { localStorage.setItem('ticketTypeFilter', typeFilter); }, [typeFilter]);
     useEffect(() => { localStorage.setItem('ticketMarketplaceFilter', marketplaceFilter); }, [marketplaceFilter]);
     useEffect(() => { localStorage.setItem('ticketResponsibleFilter', responsibleFilter); }, [responsibleFilter]);
+    useEffect(() => { localStorage.setItem('ticketFlagFilter', flagFilter); }, [flagFilter]);
 
     const handleClearFilters = () => {
         setSearchTerm('');
@@ -97,6 +99,7 @@ export default function TicketList() {
         setTypeFilter('Todos');
         setMarketplaceFilter('Todos');
         setResponsibleFilter('Todos');
+        setFlagFilter('Todos');
     };
 
     const handleClearSearch = () => {
@@ -106,6 +109,38 @@ export default function TicketList() {
             setTimeout(() => {
                 searchInputRef.current?.focus();
             }, 50);
+        }
+    };
+
+    const handleFlagClick = async (e, ticket) => {
+        e.stopPropagation();
+        let nextColor = null;
+        if (!ticket.corBandeira) {
+            nextColor = 'yellow';
+        } else if (ticket.corBandeira === 'yellow') {
+            nextColor = 'red';
+        } else if (ticket.corBandeira === 'red') {
+            nextColor = null;
+        }
+
+        try {
+            const ticketRef = doc(db, 'chamados', ticket.id);
+            await updateDoc(ticketRef, {
+                corBandeira: nextColor
+            });
+        } catch (error) {
+            console.error("Erro ao atualizar cor da bandeira:", error);
+        }
+    };
+
+    const renderFlagIcon = (color) => {
+        switch (color) {
+            case 'yellow':
+                return <Flag className="w-5 h-5 fill-yellow-400 text-yellow-500 hover:text-yellow-600 transition-all duration-200 transform hover:scale-110" />;
+            case 'red':
+                return <Flag className="w-5 h-5 fill-red-500 text-red-500 hover:text-red-600 transition-all duration-200 transform hover:scale-110" />;
+            default:
+                return <Flag className="w-5 h-5 text-gray-400 hover:text-gray-600 transition-all duration-200 transform hover:scale-110" />;
         }
     };
 
@@ -120,8 +155,17 @@ export default function TicketList() {
         const matchesType = typeFilter === 'Todos' || ticket.tipo === typeFilter;
         const matchesMarketplace = marketplaceFilter === 'Todos' || ticket.marketplace === marketplaceFilter;
         const matchesResponsible = responsibleFilter === 'Todos' || ticket.responsavel === responsibleFilter;
+        
+        let matchesFlag = true;
+        if (flagFilter !== 'Todos') {
+            if (flagFilter === 'Sem') {
+                matchesFlag = !ticket.corBandeira;
+            } else {
+                matchesFlag = ticket.corBandeira === flagFilter;
+            }
+        }
 
-        return matchesSearch && matchesStatus && matchesType && matchesMarketplace && matchesResponsible;
+        return matchesSearch && matchesStatus && matchesType && matchesMarketplace && matchesResponsible && matchesFlag;
     });
 
     const getStatusColor = (status) => {
@@ -209,7 +253,7 @@ export default function TicketList() {
                         <div className="flex items-center justify-between w-full md:w-auto">
                             <span className="text-sm font-medium text-gray-700 md:hidden">Filtros</span>
                             <div className="flex items-center justify-center w-8 h-8 flex-shrink-0 mr-1 md:mr-0">
-                                {(statusFilter !== 'Todos' || typeFilter !== 'Todos' || marketplaceFilter !== 'Todos' || responsibleFilter !== 'Todos') ? (
+                                {(statusFilter !== 'Todos' || typeFilter !== 'Todos' || marketplaceFilter !== 'Todos' || responsibleFilter !== 'Todos' || flagFilter !== 'Todos') ? (
                                     <button
                                         onClick={handleClearFilters}
                                         className="text-red-500 hover:text-red-700 transition-colors flex items-center justify-center w-full h-full"
@@ -269,6 +313,17 @@ export default function TicketList() {
                                 {[...new Set(tickets.map(t => t.responsavel).filter(Boolean))].sort().map(resp => (
                                     <option key={resp} value={resp}>{resp}</option>
                                 ))}
+                            </select>
+
+                            <select
+                                value={flagFilter}
+                                onChange={(e) => setFlagFilter(e.target.value)}
+                                className="w-full border border-gray-300 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                            >
+                                <option value="Todos">Todas as Bandeiras</option>
+                                <option value="Sem">Sem Bandeira</option>
+                                <option value="yellow">Bandeira Amarela</option>
+                                <option value="red">Bandeira Vermelha</option>
                             </select>
                         </div>
                     </div>
@@ -359,15 +414,36 @@ export default function TicketList() {
                                                     <Paperclip className="w-4 h-4 text-gray-400" title="Possui anexos" />
                                                 )}
                                                 <button
+                                                    onClick={(e) => handleFlagClick(e, ticket)}
+                                                    className="focus:outline-none"
+                                                    title={
+                                                        !ticket.corBandeira ? 'Marcar com bandeira' :
+                                                        ticket.corBandeira === 'yellow' ? 'Bandeira amarela' :
+                                                        'Bandeira vermelha'
+                                                    }
+                                                >
+                                                    {renderFlagIcon(ticket.corBandeira)}
+                                                </button>
+                                                <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         navigate(`/chamados/${ticket.id}`);
                                                     }}
-                                                    className="text-blue-600 hover:text-blue-900"
+                                                    className="text-blue-600 hover:text-blue-900 transition-all duration-200 transform hover:scale-110"
                                                     title="Ver Detalhes"
                                                 >
                                                     <Eye className="w-5 h-5" />
                                                 </button>
+                                                <a
+                                                    href={`#/chamados/${ticket.id}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="text-gray-500 hover:text-blue-600 transition-all duration-200 transform hover:scale-110"
+                                                    title="Abrir em Nova Aba"
+                                                >
+                                                    <ExternalLink className="w-5 h-5" />
+                                                </a>
                                             </div>
                                         </td>
                                     </tr>
@@ -425,14 +501,34 @@ export default function TicketList() {
                                             </div>
                                             <span>{ticket.responsavel || 'Não atribuído'}</span>
                                         </div>
-                                        <div className="flex flex-col items-end">
-                                            <span className="text-xs">{new Date(ticket.dataAbertura).toLocaleDateString('pt-BR')}</span>
-                                            {ticket.dataRetorno && (
-                                                <span className={`text-xs font-bold mt-1 ${isExpired(ticket.dataRetorno) ? 'text-red-600' : 'text-blue-600'}`}>
-                                                    Ret: {formatDate(ticket.dataRetorno)}
-                                                </span>
-                                            )}
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={(e) => handleFlagClick(e, ticket)}
+                                                className="p-1 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none"
+                                                title="Alterar Bandeira"
+                                            >
+                                                {renderFlagIcon(ticket.corBandeira)}
+                                            </button>
+                                            <a
+                                                href={`#/chamados/${ticket.id}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="p-1 rounded-lg text-gray-500 hover:text-blue-600 transition-colors"
+                                                title="Abrir em Nova Aba"
+                                            >
+                                                <ExternalLink className="w-5 h-5" />
+                                            </a>
                                         </div>
+                                    </div>
+
+                                    <div className="flex justify-between items-center text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">
+                                        <span>Aberto: {new Date(ticket.dataAbertura).toLocaleDateString('pt-BR')}</span>
+                                        {ticket.dataRetorno && (
+                                            <span className={`font-semibold ${isExpired(ticket.dataRetorno) ? 'text-red-600' : 'text-blue-600'}`}>
+                                                Retorno: {formatDate(ticket.dataRetorno)}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             ))}

@@ -4,7 +4,7 @@ import { db, storage, auth } from '../../services/firebase';
 import { doc, getDoc, updateDoc, arrayUnion, collection, addDoc, getDocs, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'react-toastify';
-import { ArrowLeft, Send, Paperclip, User, Clock, CheckCircle, AlertCircle, Lock, FileText, X, Eye, Download, Calendar } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, User, Clock, CheckCircle, AlertCircle, Lock, FileText, X, Eye, Download, Calendar, Flag } from 'lucide-react';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 
 // Helper to format YYYY-MM-DD date without timezone shift
@@ -282,6 +282,37 @@ export default function TicketDetails() {
         }
     };
 
+    const handleFlagClick = async () => {
+        let nextColor = null;
+        if (!ticket.corBandeira) {
+            nextColor = 'yellow';
+        } else if (ticket.corBandeira === 'yellow') {
+            nextColor = 'red';
+        } else if (ticket.corBandeira === 'red') {
+            nextColor = null;
+        }
+
+        try {
+            const ticketRef = doc(db, 'chamados', id);
+            await updateDoc(ticketRef, {
+                corBandeira: nextColor
+            });
+        } catch (error) {
+            console.error("Erro ao atualizar cor da bandeira nos detalhes:", error);
+        }
+    };
+
+    const renderFlagIcon = (color) => {
+        switch (color) {
+            case 'yellow':
+                return <Flag className="w-5 h-5 fill-yellow-400 text-yellow-500 hover:text-yellow-600 transition-all duration-200 transform hover:scale-110" />;
+            case 'red':
+                return <Flag className="w-5 h-5 fill-red-500 text-red-500 hover:text-red-600 transition-all duration-200 transform hover:scale-110" />;
+            default:
+                return <Flag className="w-5 h-5 text-gray-400 hover:text-gray-600 transition-all duration-200 transform hover:scale-110" />;
+        }
+    };
+
     if (loading) return <div className="p-10 text-center">Carregando detalhes...</div>;
     if (!ticket) return null;
 
@@ -333,6 +364,17 @@ export default function TicketDetails() {
                 <div>
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl font-bold text-gray-800">{ticket.codigo}</h1>
+                        <button
+                            onClick={handleFlagClick}
+                            className="p-1 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none"
+                            title={
+                                !ticket.corBandeira ? 'Marcar com bandeira' :
+                                ticket.corBandeira === 'yellow' ? 'Bandeira amarela' :
+                                'Bandeira vermelha'
+                            }
+                        >
+                            {renderFlagIcon(ticket.corBandeira)}
+                        </button>
                         <span className={`px-3 py-1 rounded-full text-sm font-bold ${getStatusColor(ticket.status)}`}>
                             {ticket.status}
                         </span>
