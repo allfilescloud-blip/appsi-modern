@@ -32,7 +32,9 @@ import {
     AlertTriangle,
     RefreshCw,
     StopCircle,
-    CheckCircle
+    CheckCircle,
+    ShoppingBag,
+    Truck
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import ConfirmationModal from '../Shared/ConfirmationModal';
@@ -50,6 +52,8 @@ const Flex = () => {
     const [isObservationModalOpen, setIsObservationModalOpen] = useState(false);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const [isPrintConfirmOpen, setIsPrintConfirmOpen] = useState(false);
+    const [isPlatformModalOpen, setIsPlatformModalOpen] = useState(false);
+    const [selectedPlatform, setSelectedPlatform] = useState('ml');
 
     // Current Report State (Form)
     const [currentReportId, setCurrentReportId] = useState(null); // Firebase ID
@@ -134,14 +138,15 @@ const Flex = () => {
         return result;
     };
 
-    const generateAutoAlias = () => {
+    const generateAutoAlias = (platform = selectedPlatform || 'ml') => {
         const now = new Date();
         const day = String(now.getDate()).padStart(2, '0');
         const month = String(now.getMonth() + 1).padStart(2, '0');
         const year = now.getFullYear();
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
-        return `Flex_${day}${month}${year}${hours}${minutes}`;
+        const prefix = platform === 'amazon' ? 'Amz_' : 'Flex_';
+        return `${prefix}${day}${month}${year}${hours}${minutes}`;
     };
 
     const extractMLIdFromJson = (jsonString) => {
@@ -167,9 +172,15 @@ const Flex = () => {
     };
 
     // Form Actions
-    const openNewReportModal = () => {
+    const handleSelectPlatform = (platform) => {
+        setIsPlatformModalOpen(false);
+        openNewReportModal(platform);
+    };
+
+    const openNewReportModal = (platform = 'ml') => {
+        setSelectedPlatform(platform);
         setReportForm({
-            alias: generateAutoAlias(),
+            alias: generateAutoAlias(platform),
             generalObservation: '',
             items: [],
             displayId: generateReportId()
@@ -180,6 +191,8 @@ const Flex = () => {
     };
 
     const openEditReportModal = (report) => {
+        const platform = report.platform || (report.alias?.startsWith('Amz') ? 'amazon' : 'ml');
+        setSelectedPlatform(platform);
         setReportForm({
             alias: report.alias,
             generalObservation: report.generalObservation || '',
@@ -382,7 +395,8 @@ const Flex = () => {
         const dataToSave = {
             userId: user.uid, // Add userId to document
             userName: userData?.nome || user.email || 'Usuário',
-            alias: reportForm.alias || generateAutoAlias(),
+            alias: reportForm.alias || generateAutoAlias(selectedPlatform),
+            platform: selectedPlatform || (reportForm.alias?.startsWith('Amz') ? 'amazon' : 'ml'),
             items: reportForm.items.map(item => ({
                 sendId: item.sendId,
                 observation: item.observation || ''
@@ -549,7 +563,7 @@ const Flex = () => {
                     Relatórios Flex
                 </h1>
                 <button
-                    onClick={openNewReportModal}
+                    onClick={() => setIsPlatformModalOpen(true)}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
                 >
                     <PlusCircle className="w-5 h-5" />
@@ -719,7 +733,7 @@ const Flex = () => {
                                             />
                                             <button
                                                 className="bg-blue-50 text-blue-600 px-3 py-2 rounded hover:bg-blue-100 transition-colors"
-                                                onClick={() => setReportForm(prev => ({ ...prev, alias: generateAutoAlias() }))}
+                                                onClick={() => setReportForm(prev => ({ ...prev, alias: generateAutoAlias(selectedPlatform) }))}
                                                 title="Gerar Alias"
                                             >
                                                 <RefreshCw size={18} />
@@ -947,6 +961,89 @@ const Flex = () => {
                 variant="info"
                 icon={CheckCircle}
             />
+
+            {/* Modal de Seleção de Plataforma (Amazon / Mercado Livre) */}
+            {isPlatformModalOpen && (
+                <div 
+                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setIsPlatformModalOpen(false)}
+                >
+                    <div 
+                        className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                                    <FilePlus size={22} />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-gray-900 text-lg leading-tight">Novo Relatório</h3>
+                                    <p className="text-xs text-gray-500">Selecione o canal para iniciar</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsPlatformModalOpen(false)}
+                                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                                title="Fechar"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6">
+                            <p className="text-sm text-gray-600 mb-4 text-center font-medium">
+                                Escolha a opção desejada para gerar o alias automaticamente:
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {/* Opção Amazon */}
+                                <button
+                                    type="button"
+                                    onClick={() => handleSelectPlatform('amazon')}
+                                    className="flex flex-col items-center justify-center p-5 border-2 border-amber-200 bg-amber-50/40 hover:bg-amber-50 hover:border-amber-500 rounded-2xl transition-all duration-200 group text-center cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95"
+                                >
+                                    <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-amber-500 group-hover:text-white transition-all duration-200 shadow-inner">
+                                        <ShoppingBag size={28} />
+                                    </div>
+                                    <span className="font-bold text-gray-800 text-base mb-1 group-hover:text-amber-800">
+                                        Amazon
+                                    </span>
+                                    <span className="text-xs font-semibold text-amber-700 bg-amber-100/80 px-2.5 py-0.5 rounded-full">
+                                        Alias: Amz_...
+                                    </span>
+                                </button>
+
+                                {/* Opção Mercado Livre */}
+                                <button
+                                    type="button"
+                                    onClick={() => handleSelectPlatform('ml')}
+                                    className="flex flex-col items-center justify-center p-5 border-2 border-yellow-200 bg-yellow-50/40 hover:bg-yellow-50 hover:border-yellow-500 rounded-2xl transition-all duration-200 group text-center cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95"
+                                >
+                                    <div className="w-14 h-14 rounded-2xl bg-yellow-100 text-yellow-800 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-yellow-400 group-hover:text-gray-900 transition-all duration-200 shadow-inner">
+                                        <Truck size={28} />
+                                    </div>
+                                    <span className="font-bold text-gray-800 text-base mb-1 group-hover:text-yellow-900">
+                                        Mercado Livre
+                                    </span>
+                                    <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full">
+                                        Alias: Flex_...
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setIsPlatformModalOpen(false)}
+                                className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-xl transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };
